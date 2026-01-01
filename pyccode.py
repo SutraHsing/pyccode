@@ -127,7 +127,7 @@ def chat(prompt, history=None):
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
-        chat(sys.argv[1])
+        print(chat(sys.argv[1]))
     else:
         # interactive
         history = []
