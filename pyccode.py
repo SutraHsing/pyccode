@@ -63,7 +63,7 @@ def chat(prompt, history=None):
     while True:
         # 1. Model Chat
         response = client.messages.create(
-            model=os.environ.get("MODEL_NAME", "deepseek-chat"),
+            model=os.environ.get("MODEL_NAME", "claude-sonnet-4-5-20250929"),
             max_tokens=1024,
             system=SYSTEM,
             messages=history,
