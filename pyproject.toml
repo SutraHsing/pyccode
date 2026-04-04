@@ -2,8 +2,11 @@
 name = "pyccode"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
     "anthropic>=0.75.0",
     "dotenv>=0.9.9",
 ]
+
+[project.scripts]
+pyccode = "pyccode:main"

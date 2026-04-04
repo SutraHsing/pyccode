@@ -18,7 +18,7 @@ pyccode is an AI Agent framework that combines the power of AI language models w
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/SutraHsing/pyccode.git
 cd pyccode
 
 # Install dependencies
@@ -120,7 +120,7 @@ For issues and questions, please open an issue on GitHub or contact the maintain
 
 ## Authors
 
-- [Your Name] - Initial implementation
+- [Sutra Hsing](https://github.com/SutraHsing) - Initial implementation
 
 ---
 

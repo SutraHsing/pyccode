@@ -56,6 +56,19 @@ client = Anthropic(
 # export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
 # export ANTHROPIC_API_KEY=${DEEPSEEK_API_KEY}
 def chat(prompt, history=None):
+    """Chat with an AI agent that can execute bash commands.
+
+    Sends a prompt to Anthropic's API with bash tool capabilities. Handles tool
+    execution iteratively: when the model requests a command, it executes the
+    command, captures output, and feeds results back to continue the conversation.
+
+    Args:
+        prompt: The user's message to send to the agent.
+        history: Optional list of previous messages for context.
+
+    Returns:
+        The final text response when the model doesn't request tool execution.
+    """
     if history is None:
         history = []
     history.append({"role": "user", "content": prompt})
@@ -77,8 +90,9 @@ def chat(prompt, history=None):
         # 3. Manage history: assistant content
         assistant_content = []
 
-        for content in response.content: # TODO: how many contents possible?
-            if content.type == "text": # TODO: Seems just append the whole content is ok
+        for content in response.content:
+            # remain the key info in the content
+            if content.type == "text":
                 assistant_content.append({"type": "text", "text": content.text})
             elif content.type == "tool_use":
                 assistant_content.append({
@@ -112,6 +126,9 @@ def chat(prompt, history=None):
                 except subprocess.TimeoutExpired:
                     output = "(timeout after 300s)"
 
+                # Clean invalid unicode characters (surrogates) to prevent encoding errors
+                output = output.encode('utf-8', errors='replace').decode('utf-8')
+
                 print(output or "(empty)")
 
                 results.append({
@@ -124,8 +141,8 @@ def chat(prompt, history=None):
         history.append({"role": "user", "content": results})
 
 
-
-if __name__ == '__main__':
+def main():
+    """Entry point for the pyccode CLI."""
     if len(sys.argv) > 1:
         print(chat(sys.argv[1]))
     else:
@@ -146,3 +163,5 @@ if __name__ == '__main__':
 
 
 
+if __name__ == '__main__':
+    main()
