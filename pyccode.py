@@ -16,26 +16,84 @@ Rules:
  and can output limit results for the following tasks(file writes done, structured summary, etc.)
 """
 
-TOOLS = [{
-    "name": "bash",
-
-    "description": """Execute bash command. Command pattern:
-* Read files: cat, grep, find, ls, head, tail, etc.
-* Write files: Write files: echo '...' > file, sed -i, cat << 'EOF' > file, etc.
-* Other commands: git, etc.
-* Subagent: python pyccode.py '<task description>' (spawns isolated agent, returns summary)""",
-
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "command": {
-                "type": "string",
-                "description": "Bash command to execute"
-            }
-        },
-        "required": ["command"]
-}
-}]
+TOOLS = [
+    {
+        "name": "bash",
+        "description": "Execute a bash command. Use for: git, ls, find, grep, python, pip, and any shell operations. For reading/writing/editing files, prefer the dedicated read/write/edit tools.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "Bash command to execute"
+                }
+            },
+            "required": ["command"]
+        }
+    },
+    {
+        "name": "read",
+        "description": "Read file contents with line numbers. Use for: viewing source code, config files, logs, any text file.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file to read (absolute or relative)"
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Line number to start reading from (1-based). Default: 1"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of lines to read. Default: 2000"
+                }
+            },
+            "required": ["file_path"]
+        }
+    },
+    {
+        "name": "write",
+        "description": "Write content to a file. Creates the file if it does not exist, overwrites it if it does. Creates parent directories if needed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file to write (absolute or relative)"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Content to write to the file"
+                }
+            },
+            "required": ["file_path", "content"]
+        }
+    },
+    {
+        "name": "edit",
+        "description": "Edit a file by replacing exact text matches. Finds old_string in the file and replaces it with new_string. The old_string must match exactly (including whitespace and indentation).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file to edit (absolute or relative)"
+                },
+                "old_string": {
+                    "type": "string",
+                    "description": "Exact text to find in the file"
+                },
+                "new_string": {
+                    "type": "string",
+                    "description": "Text to replace old_string with"
+                }
+            },
+            "required": ["file_path", "old_string", "new_string"]
+        }
+    }
+]
 
 load_dotenv(override=True)
 
@@ -55,6 +113,103 @@ client = Anthropic(
 # For example:
 # export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
 # export ANTHROPIC_API_KEY=${DEEPSEEK_API_KEY}
+
+
+def handle_bash(input: dict) -> str:
+    command = input["command"]
+    print(f"\033[33m$ {command}\033[0m")
+    try:
+        result = subprocess.run(
+            command, shell=True, capture_output=True, text=True,
+            timeout=300, cwd=os.getcwd()
+        )
+        output = result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        output = "(timeout after 300s)"
+    output = output.encode('utf-8', errors='replace').decode('utf-8')
+    if not output:
+        output = "(empty)"
+    print(output)
+    return output
+
+
+def handle_read(input: dict) -> str:
+    file_path = input["file_path"]
+    offset = input.get("offset", 1)
+    limit = input.get("limit", 2000)
+    print(f"\033[33mRead: {file_path}\033[0m")
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+            lines = f.readlines()
+        selected = lines[offset - 1 : offset - 1 + limit]
+        output = "".join(
+            f"{i:>6}\t{line}" for i, line in enumerate(selected, start=offset)
+        )
+    except FileNotFoundError:
+        output = f"Error: File not found: {file_path}"
+    except IsADirectoryError:
+        output = f"Error: Is a directory: {file_path}"
+    except PermissionError:
+        output = f"Error: Permission denied: {file_path}"
+    except Exception as e:
+        output = f"Error: {e}"
+    if not output:
+        output = "(empty)"
+    print(output)
+    return output
+
+
+def handle_write(input: dict) -> str:
+    file_path = input["file_path"]
+    content = input["content"]
+    print(f"\033[33mWrite: {file_path}\033[0m")
+    try:
+        os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        output = f"OK: Wrote {len(content)} chars to {file_path}"
+    except PermissionError:
+        output = f"Error: Permission denied: {file_path}"
+    except Exception as e:
+        output = f"Error: {e}"
+    print(output)
+    return output
+
+
+def handle_edit(input: dict) -> str:
+    file_path = input["file_path"]
+    old_string = input["old_string"]
+    new_string = input["new_string"]
+    print(f"\033[33mEdit: {file_path}\033[0m")
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+        count = content.count(old_string)
+        if count == 0:
+            output = f"Error: old_string not found in {file_path}"
+        else:
+            content = content.replace(old_string, new_string)
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            output = f"OK: Replaced {count} occurrence(s) in {file_path}"
+    except FileNotFoundError:
+        output = f"Error: File not found: {file_path}"
+    except PermissionError:
+        output = f"Error: Permission denied: {file_path}"
+    except Exception as e:
+        output = f"Error: {e}"
+    print(output)
+    return output
+
+
+TOOL_HANDLERS = {
+    "bash": handle_bash,
+    "read": handle_read,
+    "write": handle_write,
+    "edit": handle_edit,
+}
+
+
 def chat(prompt, history=None):
     """Chat with an AI agent that can execute bash commands.
 
@@ -109,32 +264,17 @@ def chat(prompt, history=None):
         results = []
         for content in response.content:
             if content.type == "tool_use":
-                command = content.input["command"]
-                print(f"\033[33m$ {command}\033[0m")  # Yellow color for commands
-
-                # Execute the command
-                try:
-                    result = subprocess.run(
-                        command,
-                        shell=True,
-                        capture_output=True,
-                        text=True,
-                        timeout=300,
-                        cwd=os.getcwd()
-                    )
-                    output = result.stdout+result.stderr
-                except subprocess.TimeoutExpired:
-                    output = "(timeout after 300s)"
-
-                # Clean invalid unicode characters (surrogates) to prevent encoding errors
-                output = output.encode('utf-8', errors='replace').decode('utf-8')
-
-                print(output or "(empty)")
+                handler = TOOL_HANDLERS.get(content.name)
+                if handler:
+                    output = handler(content.input)
+                else:
+                    output = f"Error: Unknown tool: {content.name}"
+                    print(output)
 
                 results.append({
                     "type": "tool_result",
                     "tool_use_id": content.id,
-                    "content": output[:50000] # Truncate if too long
+                    "content": output[:50000]
                 })
 
         # 5. Manage history: tool use results as user content
