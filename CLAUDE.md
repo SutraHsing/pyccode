@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Summary
 
-pyccode is a single-file AI agent CLI (`pyccode.py`) that uses the Anthropic Messages API with tool use to execute bash commands. It supports an interactive REPL mode and single-prompt mode.
+pyccode is a single-file AI agent CLI (`pyccode.py`) that uses the Anthropic Messages API with multi-tool support (bash, read, write, edit). It supports an interactive REPL mode and single-prompt mode.
 
 ## Commands
 
@@ -26,8 +26,9 @@ No tests or linter are configured.
 Everything lives in `pyccode.py`. Key components:
 
 - **`SYSTEM`** — System prompt defining agent behavior rules (tool preference, subagent delegation)
-- **`TOOLS`** — Anthropic tool-use schema for bash command execution
-- **`chat(prompt, history)`** — Core agentic loop: sends messages to the API, executes bash commands when the model requests them, feeds results back iteratively until the model returns a final text response. Manages conversation history with tool_use/tool_result blocks.
+- **`TOOLS`** — Anthropic tool-use schemas for 4 tools: `bash` (shell commands), `read` (file reading with line numbers), `write` (file creation/overwrite), `edit` (find-and-replace text editing)
+- **`handle_bash`**, **`handle_read`**, **`handle_write`**, **`handle_edit`** — Tool handler functions that execute the requested operations
+- **`chat(prompt, history)`** — Core agentic loop: sends messages to the API, dispatches tool calls to the appropriate handler, feeds results back iteratively until the model returns a final text response. Manages conversation history with tool_use/tool_result blocks.
 - **`main()`** — CLI entry point. Dispatches to single-prompt or interactive REPL mode.
 - **Subagent pattern** — The agent can spawn itself (`python pyccode.py "<task>"`) as a bash command to delegate complex subtasks with isolated context.
 
@@ -42,6 +43,9 @@ Requires a `.env` file with:
 ## Key Implementation Details
 
 - Bash commands run via `subprocess.run` with `shell=True`, 300s timeout, output truncated to 50k chars
+- Read tool returns file contents with line numbers, supports offset/limit for partial reads
+- Write tool creates parent directories automatically, overwrites existing files
+- Edit tool does exact string matching (including whitespace), fails if old_string is not unique
 - Conversation history is accumulated in-memory as a list of message dicts
 - The entry point is registered as `pyccode = "pyccode:main"` in `pyproject.toml`
 - Python >=3.12 required

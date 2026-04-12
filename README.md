@@ -9,7 +9,7 @@ pyccode is an AI Agent framework that combines the power of AI language models w
 ## Features
 
 - **AI-Powered Code Assistance**: Interactive AI agent that can understand and help with code-related tasks
-- **Bash Tool Integration**: Execute system commands, file operations, and other bash utilities
+- **Multi-Tool Support**: Dedicated tools for bash execution, file reading, file writing, and file editing
 - **Subagent System**: Spawn isolated agents for complex subtasks to maintain clean context
 - **Environment Configuration**: Support for custom API endpoints and model selection
 - **Interactive Shell**: Command-line interface for direct interaction with the AI agent
@@ -70,6 +70,15 @@ python pyccode.py "create a new module with the following structure..."
 python pyccode.py "refactor this function to improve performance"
 python pyccode.py "add tests for the authentication module"
 ```
+
+## Available Tools
+
+| Tool | Description |
+|------|-------------|
+| **bash** | Execute shell commands (git, ls, find, grep, python, pip, etc.) |
+| **read** | Read file contents with line numbers, supports offset/limit |
+| **write** | Write content to files, creates parent directories if needed |
+| **edit** | Edit files by replacing exact text matches |
 
 ## Project Structure
 
