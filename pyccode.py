@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+from dataclasses import dataclass, field
 from http.client import responses
 from wsgiref.util import application_uri
 
@@ -14,6 +15,30 @@ Rules:
   python pyccode.py "explore src/ and summarize the architecture"
 * When to use subagent: A task requires to consume a lot of context(read many files, etc.)
  and can output limit results for the following tasks(file writes done, structured summary, etc.)
+* Todo workflow: 'create' to plan, 'next' to advance. After creating tasks, call 'next' to start the first task. After finishing each task, call 'next' to complete it and start the next. Always call 'next' before starting a task's work.
+"""
+
+TODO_WRITE_TOOL_DESCRIPTION = """\
+**When to Use This Tool**: Use this tool proactively in these scenarios:
+1. Complex multi-step tasks - When a task requires 3+ distinct steps or careful planning
+2. User-initiated tasking - When the user provides multiple tasks, explicitly requests the todo list, or gives new instructions to capture
+3. Workflow state management - Mark tasks in_progress BEFORE starting work (one at a time), and mark completed when done (adding any follow-up tasks discovered along the way)
+
+Update the task list. Pass the full list of tasks each time — this replaces the entire list.
+
+**Task States**: Use these states to track progress:
+- pending: Task not yet started
+- in_progress: Currently working on (limit to ONE task at a time)
+- completed: Task finished successfully
+
+**IMPORTANT**: Task descriptions must have two forms:
+- content: The imperative form describing what needs to be done (e.g., "Run tests", "Build the project")
+- activeForm: The present continuous form shown during execution (e.g., "Running tests", "Building the project")
+
+**Task Management**:
+1. Mark a task in_progress right before starting it — only ONE task should be in_progress at a time
+2. When a task is done, mark it completed and mark the next task in_progress in the same call
+3. Only mark completed when fully finished. If blocked by errors or unresolved issues, keep it in_progress — ask the user for help if needed, but do not prematurely mark it completed\
 """
 
 TOOLS = [
@@ -92,6 +117,39 @@ TOOLS = [
             },
             "required": ["file_path", "old_string", "new_string"]
         }
+    },
+    {
+        "name": "TodoWrite",
+        "description": TODO_WRITE_TOOL_DESCRIPTION,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "todos": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "content": {
+                                "type": "string",
+                                "description": "Imperative form of the task (e.g., 'Run tests')"
+                            },
+                            "status": {
+                                "type": "string",
+                                "enum": ["pending", "in_progress", "completed"],
+                                "description": "Task state: pending, in_progress, or completed"
+                            },
+                            "activeForm": {
+                                "type": "string",
+                                "description": "Present continuous form shown during execution (e.g., 'Running tests')"
+                            }
+                        },
+                        "required": ["content", "status", "activeForm"]
+                    },
+                    "description": "Full list of tasks (replaces the entire list each call)"
+                }
+            },
+            "required": ["todos"]
+        }
     }
 ]
 
@@ -113,6 +171,43 @@ client = Anthropic(
 # For example:
 # export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
 # export ANTHROPIC_API_KEY=${DEEPSEEK_API_KEY}
+
+
+@dataclass
+class Task:
+    id: int
+    content: str
+    status: str = "pending"  # "pending" | "in_progress" | "completed"
+    activeForm: str = ""
+
+
+@dataclass
+class TaskStore:
+    tasks: list[Task] = field(default_factory=list)
+    _next_id: int = 1
+
+    def write(self, todos: list[dict]) -> str:
+        """Replace the entire task list with the provided todos."""
+        self.tasks.clear()
+        self._next_id = 1
+        for todo in todos:
+            self.tasks.append(Task(
+                id=self._next_id,
+                content=todo["content"],
+                status=todo["status"],
+                activeForm=todo["activeForm"],
+            ))
+            self._next_id += 1
+        return self._format()
+
+    def _format(self) -> str:
+        if not self.tasks:
+            return "(no tasks)"
+        icons = {"pending": "[ ]", "in_progress": "[~]", "completed": "[x]"}
+        return "\n".join(f"  {t.id}. {icons.get(t.status, '[?]')} {t.content}" for t in self.tasks)
+
+
+_task_store = TaskStore()
 
 
 def handle_bash(input: dict) -> str:
@@ -262,12 +357,33 @@ def handle_edit(input: dict) -> str:
     return output
 
 
+def handle_todo(input: dict) -> str:
+    """Replace the task list with the provided todos.
+
+    Args:
+        input: A dict containing:
+            todos (list[dict]): List of task objects with keys:
+                content (str): Imperative task description.
+                status (str): One of 'pending', 'in_progress', 'completed'.
+                activeForm (str): Present continuous form for display.
+
+    Returns:
+        Formatted task list string.
+    """
+    todos = input["todos"]
+    output = _task_store.write(todos)
+    print(f"\033[33mTodo: updated {len(todos)} task(s)\033[0m")
+    print(output)
+    return output
+
+
 # Maps tool names to their handler functions.
 TOOL_HANDLERS = {
     "bash": handle_bash,
     "read": handle_read,
     "write": handle_write,
     "edit": handle_edit,
+    "TodoWrite": handle_todo,
 }
 
 
@@ -289,25 +405,21 @@ def chat(prompt, history=None):
         history = []
     history.append({"role": "user", "content": prompt})
 
+    rounds_without_todo = 0
+
     while True:
         # 1. Model Chat
         response = client.messages.create(
             model=os.environ.get("MODEL_NAME", "claude-sonnet-4-5-20250929"),
-            max_tokens=1024,
+            max_tokens=16384,
             system=SYSTEM,
             messages=history,
             tools=TOOLS
         )
 
-        # 2. Return if no tool_use
-        if response.stop_reason != "tool_use":
-            return "".join(c.text for c in response.content if c.type == "text")
-
-        # 3. Manage history: assistant content
+        # 2. Collect assistant content into history
         assistant_content = []
-
         for content in response.content:
-            # remain the key info in the content
             if content.type == "text":
                 assistant_content.append({"type": "text", "text": content.text})
             elif content.type == "tool_use":
@@ -320,7 +432,19 @@ def chat(prompt, history=None):
 
         history.append({"role": "assistant", "content": assistant_content})
 
-        # 4. Use tools
+        # 3. Return if model finished naturally (no tool_use, no truncation)
+        if response.stop_reason == "end_turn":
+            return "".join(c.text for c in response.content if c.type == "text")
+
+        # 4. If truncated (max_tokens), prompt the model to continue
+        if response.stop_reason == "max_tokens":
+            history.append({
+                "role": "user",
+                "content": "Continue where you left off."
+            })
+            continue
+
+        # 5. Use tools
         # results for each tool use
         results = []
         for content in response.content:
@@ -338,8 +462,23 @@ def chat(prompt, history=None):
                     "content": output[:50000]
                 })
 
-        # 5. Manage history: tool use results as user content
+        # 6. Manage history: tool use results as user content
         history.append({"role": "user", "content": results})
+
+        # 7. Round-counter reminder: nudge agent to use todo after 5 rounds
+        if any(c.type == "tool_use" and c.name == "TodoWrite" for c in response.content):
+            rounds_without_todo = 0
+        else:
+            rounds_without_todo += 1
+        if rounds_without_todo >= 5:
+            history.append({
+                "role": "user",
+                "content": (
+                    "Reminder: You've used tools 5+ times without tracking progress. "
+                    "Consider using the 'TodoWrite' tool to create a plan or update task status."
+                )
+            })
+            rounds_without_todo = 0
 
 
 def main():

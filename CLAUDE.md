@@ -26,9 +26,10 @@ No tests or linter are configured.
 Everything lives in `pyccode.py`. Key components:
 
 - **`SYSTEM`** — System prompt defining agent behavior rules (tool preference, subagent delegation)
-- **`TOOLS`** — Anthropic tool-use schemas for 4 tools: `bash` (shell commands), `read` (file reading with line numbers), `write` (file creation/overwrite), `edit` (find-and-replace text editing)
-- **`handle_bash`**, **`handle_read`**, **`handle_write`**, **`handle_edit`** — Tool handler functions that execute the requested operations
-- **`chat(prompt, history)`** — Core agentic loop: sends messages to the API, dispatches tool calls to the appropriate handler, feeds results back iteratively until the model returns a final text response. Manages conversation history with tool_use/tool_result blocks.
+- **`TOOLS`** — Anthropic tool-use schemas for 5 tools: `bash` (shell commands), `read` (file reading with line numbers), `write` (file creation/overwrite), `edit` (find-and-replace text editing), `todo` (task list management)
+- **`Task`** / **`TaskStore`** — Dataclasses for in-memory task tracking with create/update/list operations
+- **`handle_bash`**, **`handle_read`**, **`handle_write`**, **`handle_edit`**, **`handle_todo`** — Tool handler functions that execute the requested operations
+- **`chat(prompt, history)`** — Core agentic loop: sends messages to the API, dispatches tool calls to the appropriate handler, feeds results back iteratively until the model returns a final text response. Manages conversation history with tool_use/tool_result blocks. Includes a round-counter that injects a reminder to use the `todo` tool after 5 consecutive tool-use rounds without task tracking.
 - **`main()`** — CLI entry point. Dispatches to single-prompt or interactive REPL mode.
 - **Subagent pattern** — The agent can spawn itself (`python pyccode.py "<task>"`) as a bash command to delegate complex subtasks with isolated context.
 
@@ -46,6 +47,8 @@ Requires a `.env` file with:
 - Read tool returns file contents with line numbers, supports offset/limit for partial reads
 - Write tool creates parent directories automatically, overwrites existing files
 - Edit tool does exact string matching (including whitespace), fails if old_string is not unique
+- Todo tool manages an in-memory task list (session-scoped, not persisted). Actions: `create` (batch-add titles), `update` (mark pending/in_progress/completed), `list` (review progress)
+- After 5 tool-use rounds without using `todo`, a reminder is injected into the conversation history to nudge the agent to plan
 - Conversation history is accumulated in-memory as a list of message dicts
 - The entry point is registered as `pyccode = "pyccode:main"` in `pyproject.toml`
 - Python >=3.12 required
