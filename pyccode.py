@@ -184,20 +184,16 @@ class Task:
 @dataclass
 class TaskStore:
     tasks: list[Task] = field(default_factory=list)
-    _next_id: int = 1
-
     def write(self, todos: list[dict]) -> str:
         """Replace the entire task list with the provided todos."""
         self.tasks.clear()
-        self._next_id = 1
-        for todo in todos:
+        for i, todo in enumerate(todos, start=1):
             self.tasks.append(Task(
-                id=self._next_id,
+                id=i,
                 content=todo["content"],
                 status=todo["status"],
                 activeForm=todo["activeForm"],
             ))
-            self._next_id += 1
         return self._format()
 
     def _format(self) -> str:
