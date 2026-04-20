@@ -8,14 +8,17 @@ from wsgiref.util import application_uri
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-SYSTEM = f"""You are a helpful AI Agent at {os.getcwd()} with some bash tools.
+_BASE_SYSTEM = f"""You are a helpful AI Agent at {os.getcwd()} with some bash tools.
 Rules:
 * Prefer tools use over prose. Act first, explain briefly after.
-* Subagent: For complex subtasks, spawn subagent to keep the main agent context clean, e.g.:
-  python pyccode.py "explore src/ and summarize the architecture"
+* For complex tasks with multiple steps, use the TodoWrite tool to plan and track progress.
+"""
+
+SYSTEM = _BASE_SYSTEM + """\
+* Subagent: For complex subtasks, use the run_subagent tool to delegate to a sub-agent with isolated context, e.g.:
+  run_subagent(prompt="explore src/ and summarize the architecture")
 * When to use subagent: A task requires to consume a lot of context(read many files, etc.)
  and can output limit results for the following tasks(file writes done, structured summary, etc.)
-* Todo workflow: 'create' to plan, 'next' to advance. After creating tasks, call 'next' to start the first task. After finishing each task, call 'next' to complete it and start the next. Always call 'next' before starting a task's work.
 """
 
 TODO_WRITE_TOOL_DESCRIPTION = """\
@@ -152,6 +155,29 @@ TOOLS = [
         }
     }
 ]
+
+SUBAGENT_TOOL = {
+    "name": "run_subagent",
+    "description": (
+        "Spawn a sub-agent to handle a complex subtask in isolation. "
+        "The sub-agent has access to bash, read, write, edit, and TodoWrite tools "
+        "but cannot spawn further sub-agents. "
+        "IMPORTANT: The sub-agent shares NO context with you — it only sees the prompt you write. "
+        "Your prompt must be self-contained and include all relevant information the sub-agent needs "
+        "(file paths, prior findings, constraints, goals). Be generous with context rather than terse. "
+        "Do not assume the sub-agent knows anything from your conversation history."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "prompt": {
+                "type": "string",
+                "description": "The task for the sub-agent",
+            }
+        },
+        "required": ["prompt"],
+    },
+}
 
 load_dotenv(override=True)
 
@@ -373,6 +399,89 @@ def handle_todo(input: dict) -> str:
     return output
 
 
+def handle_subagent(input: dict) -> str:
+    """Run a sub-agent with isolated context to handle a subtask.
+
+    Spawns an in-process sub-agent that has access to all tools in TOOLS
+    (bash, read, write, edit, TodoWrite) but NOT run_subagent itself,
+    preventing recursive spawning. The sub-agent gets its own isolated
+    task store and conversation history.
+
+    Args:
+        input: A dict containing a 'prompt' key with the task for the sub-agent.
+
+    Returns:
+        The sub-agent's final text response.
+    """
+    global _task_store
+    prompt = input["prompt"]
+    print(f"\033[33m[Subagent] {prompt[:500]}\033[0m")
+
+    # Swap in an isolated task store for the sub-agent
+    main_store = _task_store
+    _task_store = TaskStore()
+
+    try:
+        messages = [{"role": "user", "content": prompt}]
+
+        while True:
+            response = client.messages.create(
+                model=os.environ.get("MODEL_NAME", "claude-sonnet-4-5-20250929"),
+                max_tokens=16384,
+                system=_BASE_SYSTEM,
+                messages=messages,
+                tools=TOOLS,
+            )
+
+            # Collect assistant content
+            assistant_content = []
+            for content in response.content:
+                if content.type == "text":
+                    assistant_content.append({"type": "text", "text": content.text})
+                elif content.type == "tool_use":
+                    assistant_content.append({
+                        "type": "tool_use",
+                        "id": content.id,
+                        "name": content.name,
+                        "input": content.input,
+                    })
+            messages.append({"role": "assistant", "content": assistant_content})
+
+            # Return if done
+            if response.stop_reason == "end_turn":
+                result = "".join(
+                    c.text for c in response.content if c.type == "text"
+                )
+                print("\033[33m[Subagent] Done\033[0m")
+                return result
+
+            # Handle truncation
+            if response.stop_reason == "max_tokens":
+                messages.append({
+                    "role": "user",
+                    "content": "Continue where you left off.",
+                })
+                continue
+
+            # Execute tool calls
+            results = []
+            for content in response.content:
+                if content.type == "tool_use":
+                    handler = TOOL_HANDLERS.get(content.name)
+                    if handler:
+                        output = handler(content.input)
+                    else:
+                        output = f"Error: Unknown tool: {content.name}"
+                    results.append({
+                        "type": "tool_result",
+                        "tool_use_id": content.id,
+                        "content": output[:50000],
+                    })
+            messages.append({"role": "user", "content": results})
+    finally:
+        _task_store = main_store
+
+
 # Maps tool names to their handler functions.
 TOOL_HANDLERS = {
     "bash": handle_bash,
@@ -380,6 +489,7 @@ TOOL_HANDLERS = {
     "write": handle_write,
     "edit": handle_edit,
     "TodoWrite": handle_todo,
+    "run_subagent": handle_subagent,
 }
 
 
@@ -410,7 +520,7 @@ def chat(prompt, history=None):
             max_tokens=16384,
             system=SYSTEM,
             messages=history,
-            tools=TOOLS
+            tools=TOOLS + [SUBAGENT_TOOL]
         )
 
         # 2. Collect assistant content into history
