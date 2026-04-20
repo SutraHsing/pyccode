@@ -415,7 +415,7 @@ def handle_subagent(input: dict) -> str:
     """
     global _task_store
     prompt = input["prompt"]
-    print(f"\033[33m[Subagent] {prompt[:500]}\033[0m")
+    print(f"\033[33m[Subagent] {prompt[:2000]}\033[0m")
 
     # Swap in an isolated task store for the sub-agent
     main_store = _task_store

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Summary
 
-pyccode is a single-file AI agent CLI (`pyccode.py`) that uses the Anthropic Messages API with multi-tool support (bash, read, write, edit). It supports an interactive REPL mode and single-prompt mode.
+pyccode is a single-file AI agent CLI (`pyccode.py`) that uses the Anthropic Messages API with multi-tool support (bash, read, write, edit, TodoWrite, run_subagent). It supports an interactive REPL mode and single-prompt mode.
 
 ## Commands
 
@@ -25,13 +25,15 @@ No tests or linter are configured.
 
 Everything lives in `pyccode.py`. Key components:
 
-- **`SYSTEM`** — System prompt defining agent behavior rules (tool preference, subagent delegation)
-- **`TOOLS`** — Anthropic tool-use schemas for 5 tools: `bash` (shell commands), `read` (file reading with line numbers), `write` (file creation/overwrite), `edit` (find-and-replace text editing), `todo` (task list management)
-- **`Task`** / **`TaskStore`** — Dataclasses for in-memory task tracking with create/update/list operations
-- **`handle_bash`**, **`handle_read`**, **`handle_write`**, **`handle_edit`**, **`handle_todo`** — Tool handler functions that execute the requested operations
-- **`chat(prompt, history)`** — Core agentic loop: sends messages to the API, dispatches tool calls to the appropriate handler, feeds results back iteratively until the model returns a final text response. Manages conversation history with tool_use/tool_result blocks. Includes a round-counter that injects a reminder to use the `todo` tool after 5 consecutive tool-use rounds without task tracking.
+- **`_BASE_SYSTEM`** / **`SYSTEM`** — Two-tier system prompt. `_BASE_SYSTEM` has core rules; `SYSTEM` extends it with subagent delegation instructions. Subagents get `_BASE_SYSTEM` only (cannot recurse).
+- **`TOOLS`** — Anthropic tool-use schemas for 5 tools: `bash`, `read`, `write`, `edit`, `TodoWrite`
+- **`SUBAGENT_TOOL`** — Separate schema for `run_subagent`, only added to the main agent's tool list (`TOOLS + [SUBAGENT_TOOL]`), not available to subagents
+- **`TOOL_HANDLERS`** — Dispatch dict mapping tool names to handler functions
+- **`Task`** / **`TaskStore`** — Dataclasses for in-memory task tracking with a `write()` method that replaces the entire list
+- **`handle_bash`**, **`handle_read`**, **`handle_write`**, **`handle_edit`**, **`handle_todo`**, **`handle_subagent`** — Tool handler functions
+- **`handle_subagent`** — In-process sub-agent: creates its own conversation loop with isolated `TaskStore`, uses `_BASE_SYSTEM` and `TOOLS` (no `SUBAGENT_TOOL` to prevent recursion). Swaps the global `_task_store` and restores it in a `finally` block.
+- **`chat(prompt, history)`** — Core agentic loop: sends messages to the API, dispatches tool calls via `TOOL_HANDLERS`, feeds results back iteratively until `end_turn`. Handles `max_tokens` truncation by injecting "Continue where you left off." Manages conversation history with tool_use/tool_result blocks. Includes a round-counter that injects a reminder to use `TodoWrite` after 5 consecutive tool-use rounds without task tracking.
 - **`main()`** — CLI entry point. Dispatches to single-prompt or interactive REPL mode.
-- **Subagent pattern** — The agent can spawn itself (`python pyccode.py "<task>"`) as a bash command to delegate complex subtasks with isolated context.
 
 ## Environment Configuration
 
@@ -46,9 +48,11 @@ Requires a `.env` file with:
 - Bash commands run via `subprocess.run` with `shell=True`, 300s timeout, output truncated to 50k chars
 - Read tool returns file contents with line numbers, supports offset/limit for partial reads
 - Write tool creates parent directories automatically, overwrites existing files
-- Edit tool does exact string matching (including whitespace), fails if old_string is not unique
-- Todo tool manages an in-memory task list (session-scoped, not persisted). Actions: `create` (batch-add titles), `update` (mark pending/in_progress/completed), `list` (review progress)
-- After 5 tool-use rounds without using `todo`, a reminder is injected into the conversation history to nudge the agent to plan
+- Edit tool does exact string matching (including whitespace), replaces **all** occurrences of `old_string`
+- TodoWrite replaces the entire task list each call. Tasks have `content` (imperative), `activeForm` (present continuous), and `status` (pending/in_progress/completed)
+- Subagent runs in-process (not a shell spawn), gets isolated context — only the prompt passed to it, no shared conversation history
+- After 5 tool-use rounds without using `TodoWrite`, a reminder is injected into the conversation history
 - Conversation history is accumulated in-memory as a list of message dicts
+- Tool outputs are truncated to 50k chars before being sent back to the API
 - The entry point is registered as `pyccode = "pyccode:main"` in `pyproject.toml`
 - Python >=3.12 required
