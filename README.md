@@ -1,10 +1,11 @@
 # pyccode
 
-A single-file AI agent CLI that uses the Anthropic Messages API with multi-tool support. Supports interactive REPL and single-prompt modes.
+A single-file AI agent CLI that uses the Anthropic Messages API with multi-tool and skill support. Supports interactive REPL and single-prompt modes.
 
 ## Features
 
-- **6 built-in tools**: bash, read, write, edit, TodoWrite, run_subagent
+- **7 built-in tools**: bash, read, write, edit, TodoWrite, skill, run_subagent
+- **Skill loading**: Auto-discovers `skills/*/SKILL.md` files and lets the agent load detailed instructions on demand
 - **Subagent system**: Delegate complex subtasks to isolated in-process agents
 - **Task tracking**: Built-in todo list with pending/in_progress/completed states
 - **Anthropic-compatible**: Works with any provider supporting the Anthropic Messages API
@@ -49,7 +50,25 @@ ANTHROPIC_TIMEOUT=600                         # optional, seconds (default 600)
 | **write** | Write content to files, creates parent directories if needed |
 | **edit** | Edit files by replacing exact text matches |
 | **TodoWrite** | Manage a task list with pending/in_progress/completed states |
+| **skill** | Load a skill's full markdown instructions and skill directory path by name |
 | **run_subagent** | Spawn an isolated sub-agent for complex subtasks |
+
+## Skills
+
+Add skills under `skills/<skill-name>/SKILL.md`. Each skill file must start with YAML frontmatter:
+
+```markdown
+---
+name: example-skill
+description: Use when the agent needs this specific guidance.
+---
+
+# Example Skill
+
+Detailed instructions go here.
+```
+
+When skills are present, pyccode injects their names and descriptions into the first user message. The agent can then call the `skill` tool to load the full instructions and the skill directory path, which allows reference files beside `SKILL.md` to be used as needed.
 
 ## Dependencies
 
