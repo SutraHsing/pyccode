@@ -1,14 +1,20 @@
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
+
+import yaml
 from http.client import responses
 from wsgiref.util import application_uri
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-_BASE_SYSTEM = f"""You are a helpful AI Agent at {os.getcwd()} with some bash tools.
+WORKDIR = Path.cwd()
+
+_BASE_SYSTEM = f"""You are a helpful AI Agent at {WORKDIR} with some bash tools.
 Rules:
 * Prefer tools use over prose. Act first, explain briefly after.
 * For complex tasks with multiple steps, use the TodoWrite tool to plan and track progress.
@@ -153,6 +159,20 @@ TOOLS = [
             },
             "required": ["todos"]
         }
+    },
+    {
+        "name": "skill",
+        "description": "Load a skill's detailed instructions by name. Use when the user's request matches a skill's description. Returns the skill's full markdown body and its directory path (for accessing reference files).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the skill to load"
+                }
+            },
+            "required": ["name"]
+        }
     }
 ]
 
@@ -230,6 +250,39 @@ class TaskStore:
 
 
 _task_store = TaskStore()
+
+
+def load_skills() -> dict:
+    """Load all skill definitions from skills/*/SKILL.md.
+
+    Returns a dict keyed by skill name, each value is:
+    {"description": str, "content": str, "path": str (absolute path to skill directory)}.
+    The path allows the agent to locate reference files alongside SKILL.md.
+    """
+    skills = {}
+    skills_dir = WORKDIR / "skills"
+    if not skills_dir.is_dir():
+        return skills
+    for entry in sorted(skills_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        skill_file = entry / "SKILL.md"
+        if not skill_file.is_file():
+            continue
+        with open(skill_file, "r", encoding="utf-8") as f:
+            raw = f.read()
+        m = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)', raw, re.DOTALL)
+        if not m:
+            continue
+        meta_text, body = m.group(1), m.group(2)
+        meta = yaml.safe_load(meta_text) or {}
+        name = meta.get("name", entry.name)
+        description = meta.get("description", "")
+        skills[name] = {"description": description, "content": body.strip(), "path": str(entry)}
+    return skills
+
+
+SKILLS = load_skills()
 
 
 def handle_bash(input: dict) -> str:
@@ -422,6 +475,12 @@ def handle_subagent(input: dict) -> str:
     _task_store = TaskStore()
 
     try:
+        # Inject skill metadata into first user message
+        if SKILLS:
+            skill_info = "\n".join(
+                f"- {name}: {info['description']}" for name, info in SKILLS.items()
+            )
+            prompt = f"<system-reminder>\nAvailable skills:\n{skill_info}\n</system-reminder>\n\n{prompt}"
         messages = [{"role": "user", "content": prompt}]
 
         while True:
@@ -482,6 +541,16 @@ def handle_subagent(input: dict) -> str:
         _task_store = main_store
 
 
+def handle_skill(input: dict) -> str:
+    """Load and return a skill's full instructions by name."""
+    name = input["name"]
+    if name not in SKILLS:
+        return f"Error: Unknown skill: {name}. Available: {', '.join(SKILLS.keys()) or '(none)'}"
+    print(f"\033[33mSkill: {name}\033[0m")
+    skill = SKILLS[name]
+    return f"Skill path: {skill['path']}\n\n{skill['content']}"
+
+
 # Maps tool names to their handler functions.
 TOOL_HANDLERS = {
     "bash": handle_bash,
@@ -490,6 +559,7 @@ TOOL_HANDLERS = {
     "edit": handle_edit,
     "TodoWrite": handle_todo,
     "run_subagent": handle_subagent,
+    "skill": handle_skill,
 }
 
 
@@ -509,6 +579,12 @@ def chat(prompt, history=None):
     """
     if history is None:
         history = []
+    # Inject skill metadata into first user message
+    if not history and SKILLS:
+        skill_info = "\n".join(
+            f"- {name}: {info['description']}" for name, info in SKILLS.items()
+        )
+        prompt = f"<system-reminder>\nAvailable skills:\n{skill_info}\n</system-reminder>\n\n{prompt}"
     history.append({"role": "user", "content": prompt})
 
     rounds_without_todo = 0
