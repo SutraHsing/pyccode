@@ -660,7 +660,7 @@ def enforceToolResultBudget(results: list) -> list:
             break
         content = results[i]["content"]
         if len(content) <= 2 * SUMMARY_HEAD_CHARS:
-            continue
+            break
         new_content = _persist_tool_result(results[i]["tool_use_id"], content)
         total += len(new_content) - len(content)
         results[i] = {**results[i], "content": new_content}

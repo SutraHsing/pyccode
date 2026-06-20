@@ -56,7 +56,9 @@ Sorts results by content size descending and persists largest-first via
 
 Skip heuristic: results with `len(content) <= 2 * SUMMARY_HEAD_CHARS`
 (4KB) are left alone — re-persisting would not shrink them (they may
-already be Layer-1 summaries, or genuinely small).
+already be Layer-1 summaries, or genuinely small). Since the iteration
+is sorted by size descending, hitting one small result means all
+remaining are also small, so the loop `break`s rather than `continue`s.
 
 ### Shared rules
 
