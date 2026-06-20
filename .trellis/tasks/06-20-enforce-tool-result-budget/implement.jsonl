@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/chat-loop.md", "reason": "Document the two-layer persistence model and where enforceToolResultBudget hooks in"}
+{"file": ".trellis/spec/backend/tool-handlers.md", "reason": "Handler shape; enforceToolResultBudget is not a handler but follows the no-raise convention"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Persistence failure must not break chat loop; follow _persist_tool_result's try/except fallback pattern"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Reuse the [Tool result persisted: ...] prefix when enforceToolResultBudget persists a result"}

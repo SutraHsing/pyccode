@@ -31,21 +31,54 @@ while True:
 
 ## Tool Result Size Cap
 
-Before appending a `tool_result`:
+Two-layer model. Both layers share `_persist_tool_result` (the disk-write +
+preview builder); the wrappers decide when to call it.
 
-```python
-"content": maybePersistLargeToolResult(content.id, output)
+```
+for each tool_use:
+    content = maybePersistLargeToolResult(id, output)   # layer 1: per-result (>50K)
+    results.append({tool_result, content})
+results = enforceToolResultBudget(results)              # layer 2: per-message (>200K total)
+history.append({role: user, content: results})
 ```
 
-`output[:50000]` style hard truncation is forbidden — it silently drops the tail with no recovery path. See `maybePersistLargeToolResult` at pyccode.py:559.
+### Layer 1 — `maybePersistLargeToolResult` (per result)
 
-- Threshold: `LARGE_TOOL_RESULT_THRESHOLD = 50000` chars.
-- Over threshold: full output goes to `WORKDIR / SESSION_ID / "tool-results" / <safe_id>.{txt|json}`, summary (fixed `SUMMARY_HEAD_CHARS = 2000` head slice + small metadata, total ~2.2KB) goes to the API.
+Triggered per result when `len(output) > LARGE_TOOL_RESULT_THRESHOLD` (50K
+chars). Writes the full output to disk, replaces with a ~2.2KB preview.
+See pyccode.py:600.
+
+### Layer 2 — `enforceToolResultBudget` (per message)
+
+Triggered per message when the sum of `len(content)` across all
+`tool_result` blocks exceeds `TOOL_RESULT_MESSAGE_BUDGET` (200K chars).
+Sorts results by content size descending and persists largest-first via
+`_persist_tool_result` until the total fits. See pyccode.py:626.
+
+Skip heuristic: results with `len(content) <= 2 * SUMMARY_HEAD_CHARS`
+(4KB) are left alone — re-persisting would not shrink them (they may
+already be Layer-1 summaries, or genuinely small).
+
+### Shared rules
+
+- File layout: `WORKDIR / SESSION_ID / "tool-results" / <safe_id>.{txt|json}`.
 - Extension sniffed via `json.loads` — `.json` if valid, otherwise `.txt`.
-- Summary intentionally does not name a downstream tool. The agent decides how to inspect the file (`read`, `grep`, `bash`).
-- On filesystem failure: fall back to legacy 50K truncation with `[persist failed: <error>]` appended. Never raise.
+- `id` sanitized with `re.sub(r'[^A-Za-z0-9_-]', '_', tool_use_id)`.
+- Preview format: head-only `SUMMARY_HEAD_CHARS` (2000) slice + small
+  metadata (`[tool_result_persisted]`, original length, persisted path).
+  Does not prescribe a downstream tool — the agent picks.
+- On filesystem failure: `_persist_tool_result` returns legacy 50K
+  truncation with `[persist failed: <error>]` appended. Never raises.
+  Layer 2 continues to the next result on per-result failure.
 
-Both `chat()` and `handle_subagent()` must call this helper. Adding a new agentic loop means inheriting the same contract.
+### Forbidden
+
+`output[:50000]` style hard truncation is forbidden anywhere except
+inside `_persist_tool_result`'s error fallback. It silently drops the
+tail with no recovery path.
+
+Both `chat()` and `handle_subagent()` must run both layers. Adding a new
+agentic loop means inheriting the same contract.
 
 ---
 

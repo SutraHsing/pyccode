@@ -18,6 +18,7 @@ WORKDIR = Path.cwd()
 SESSION_ID = uuid.uuid4().hex
 LARGE_TOOL_RESULT_THRESHOLD = 50000   # chars
 SUMMARY_HEAD_CHARS = 2000              # fixed head slice; meta + end marker keeps total ~2.2KB
+TOOL_RESULT_MESSAGE_BUDGET = 200_000   # chars; per-message cap enforced by enforceToolResultBudget
 
 _BASE_SYSTEM = f"""You are a helpful AI Agent at {WORKDIR} with some bash tools.
 Rules:
@@ -541,7 +542,7 @@ def handle_subagent(input: dict) -> str:
                         "tool_use_id": content.id,
                         "content": maybePersistLargeToolResult(content.id, output),
                     })
-            messages.append({"role": "user", "content": results})
+            messages.append({"role": "user", "content": enforceToolResultBudget(results)})
     finally:
         _task_store = main_store
 
@@ -556,30 +557,17 @@ def handle_skill(input: dict) -> str:
     return f"Skill path: {skill['path']}\n\n{skill['content']}"
 
 
-def maybePersistLargeToolResult(tool_use_id: str, output: str) -> str:
-    """Persist oversized tool output to a file and return a compact summary.
+def _persist_tool_result(tool_use_id: str, output: str) -> str:
+    """Write ``output`` to disk and return a preview summary.
 
-    If ``len(output) <= LARGE_TOOL_RESULT_THRESHOLD`` the input is returned
-    unchanged. Otherwise the full output is written to
-    ``WORKDIR / SESSION_ID / "tool-results" / <safe_id>.<ext>`` and a
-    head-only summary of ``SUMMARY_HEAD_CHARS`` chars plus small metadata
-    is returned. The summary intentionally does not prescribe a downstream
-    tool; the agent chooses how to inspect the file (read, grep, bash, etc.).
+    Caller decides whether persistence is warranted (threshold or budget).
+    Writes to ``WORKDIR / SESSION_ID / "tool-results" / <safe_id>.<ext>``
+    with extension auto-sniffed via ``json.loads``. The returned summary
+    uses the format documented on ``maybePersistLargeToolResult``.
 
-    On filesystem failure the function falls back to legacy truncation with
-    an error note appended, so the chat loop never breaks due to persistence.
-
-    Args:
-        tool_use_id: The Anthropic tool_use ID; used as the filename stem.
-        output: The full tool output string.
-
-    Returns:
-        Either the original ``output`` (under threshold) or a summary string
-        referencing the persisted file path (over threshold).
+    On filesystem failure, returns legacy 50K truncation with an error
+    note appended so the chat loop never breaks.
     """
-    if len(output) <= LARGE_TOOL_RESULT_THRESHOLD:
-        return output
-
     try:
         try:
             json.loads(output)
@@ -607,6 +595,76 @@ def maybePersistLargeToolResult(tool_use_id: str, output: str) -> str:
     except Exception as e:
         truncated = output[:LARGE_TOOL_RESULT_THRESHOLD]
         return truncated + f"\n[persist failed: {e}]"
+
+
+def maybePersistLargeToolResult(tool_use_id: str, output: str) -> str:
+    """Persist oversized tool output to a file and return a compact summary.
+
+    If ``len(output) <= LARGE_TOOL_RESULT_THRESHOLD`` the input is returned
+    unchanged. Otherwise the full output is written to
+    ``WORKDIR / SESSION_ID / "tool-results" / <safe_id>.<ext>`` and a
+    head-only summary of ``SUMMARY_HEAD_CHARS`` chars plus small metadata
+    is returned. The summary intentionally does not prescribe a downstream
+    tool; the agent chooses how to inspect the file (read, grep, bash, etc.).
+
+    On filesystem failure the function falls back to legacy truncation with
+    an error note appended, so the chat loop never breaks due to persistence.
+
+    Args:
+        tool_use_id: The Anthropic tool_use ID; used as the filename stem.
+        output: The full tool output string.
+
+    Returns:
+        Either the original ``output`` (under threshold) or a summary string
+        referencing the persisted file path (over threshold).
+    """
+    if len(output) <= LARGE_TOOL_RESULT_THRESHOLD:
+        return output
+    return _persist_tool_result(tool_use_id, output)
+
+
+def enforceToolResultBudget(results: list) -> list:
+    """Cap total tool_result size in a single user message.
+
+    If the combined ``len(content)`` across all ``tool_result`` blocks
+    exceeds ``TOOL_RESULT_MESSAGE_BUDGET``, the largest results are
+    persisted to disk (via ``_persist_tool_result``) and replaced with
+    preview summaries until the total fits the budget. Already-small
+    results (``<= 2 * SUMMARY_HEAD_CHARS``) are skipped because
+    re-persisting would not shrink them.
+
+    Runs after the per-result ``maybePersistLargeToolResult`` pass. The
+    two compose: large individual results are summarized first, then the
+    budget pass cleans up "many medium results" cases.
+
+    Args:
+        results: List of ``tool_result`` dicts (each with ``content`` and
+            ``tool_use_id`` keys). Mutated in place via index assignment;
+            the same list object is returned for convenience.
+
+    Returns:
+        The same ``results`` list, possibly with some entries' ``content``
+        replaced by preview summaries.
+    """
+    total = sum(len(r["content"]) for r in results)
+    if total <= TOOL_RESULT_MESSAGE_BUDGET:
+        return results
+
+    order = sorted(
+        range(len(results)),
+        key=lambda i: len(results[i]["content"]),
+        reverse=True,
+    )
+    for i in order:
+        if total <= TOOL_RESULT_MESSAGE_BUDGET:
+            break
+        content = results[i]["content"]
+        if len(content) <= 2 * SUMMARY_HEAD_CHARS:
+            continue
+        new_content = _persist_tool_result(results[i]["tool_use_id"], content)
+        total += len(new_content) - len(content)
+        results[i] = {**results[i], "content": new_content}
+    return results
 
 
 # Maps tool names to their handler functions.
@@ -703,7 +761,7 @@ def chat(prompt, history=None):
                 })
 
         # 6. Manage history: tool use results as user content
-        history.append({"role": "user", "content": results})
+        history.append({"role": "user", "content": enforceToolResultBudget(results)})
 
         # 7. Round-counter reminder: nudge agent to use todo after 5 rounds
         if any(c.type == "tool_use" and c.name == "TodoWrite" for c in response.content):

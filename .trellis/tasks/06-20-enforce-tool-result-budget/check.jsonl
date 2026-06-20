@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/chat-loop.md", "reason": "Verify the new function is documented alongside maybePersistLargeToolResult and both integration points (chat + subagent) are covered"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Code review checklist — confirm no output[:50000] reintroduced, handler-style docstring, no backwards-compat shims"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Confirm failure isolation: _persist_tool_result catches exceptions, enforceToolResultBudget continues on per-result failure"}
