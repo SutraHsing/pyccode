@@ -40,7 +40,7 @@ Before appending a `tool_result`:
 `output[:50000]` style hard truncation is forbidden — it silently drops the tail with no recovery path. See `maybePersistLargeToolResult` at pyccode.py:559.
 
 - Threshold: `LARGE_TOOL_RESULT_THRESHOLD = 50000` chars.
-- Over threshold: full output goes to `WORKDIR / SESSION_ID / "tool-results" / <safe_id>.{txt|json}`, summary (~2KB head-only) goes to the API.
+- Over threshold: full output goes to `WORKDIR / SESSION_ID / "tool-results" / <safe_id>.{txt|json}`, summary (fixed `SUMMARY_HEAD_CHARS = 2000` head slice + small metadata, total ~2.2KB) goes to the API.
 - Extension sniffed via `json.loads` — `.json` if valid, otherwise `.txt`.
 - Summary intentionally does not name a downstream tool. The agent decides how to inspect the file (`read`, `grep`, `bash`).
 - On filesystem failure: fall back to legacy 50K truncation with `[persist failed: <error>]` appended. Never raise.

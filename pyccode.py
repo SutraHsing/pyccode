@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 WORKDIR = Path.cwd()
 SESSION_ID = uuid.uuid4().hex
 LARGE_TOOL_RESULT_THRESHOLD = 50000   # chars
-SUMMARY_BUDGET = 2048                  # chars — head + metadata
+SUMMARY_HEAD_CHARS = 2000              # fixed head slice; meta + end marker keeps total ~2.2KB
 
 _BASE_SYSTEM = f"""You are a helpful AI Agent at {WORKDIR} with some bash tools.
 Rules:
@@ -562,9 +562,9 @@ def maybePersistLargeToolResult(tool_use_id: str, output: str) -> str:
     If ``len(output) <= LARGE_TOOL_RESULT_THRESHOLD`` the input is returned
     unchanged. Otherwise the full output is written to
     ``WORKDIR / SESSION_ID / "tool-results" / <safe_id>.<ext>`` and a
-    head-only summary of at most ``SUMMARY_BUDGET`` chars is returned. The
-    summary intentionally does not prescribe a downstream tool; the agent
-    chooses how to inspect the file (read, grep, bash, etc.).
+    head-only summary of ``SUMMARY_HEAD_CHARS`` chars plus small metadata
+    is returned. The summary intentionally does not prescribe a downstream
+    tool; the agent chooses how to inspect the file (read, grep, bash, etc.).
 
     On filesystem failure the function falls back to legacy truncation with
     an error note appended, so the chat loop never breaks due to persistence.
@@ -593,18 +593,14 @@ def maybePersistLargeToolResult(tool_use_id: str, output: str) -> str:
         file_path = result_dir / f"{safe_id}.{ext}"
         file_path.write_text(output, encoding='utf-8')
 
-        meta = (
+        summary = (
             f"[tool_result_persisted]\n"
             f"original_length: {len(output)} chars\n"
             f"persisted_to: {file_path}\n"
             f"\n--- HEAD ---\n"
+            f"{output[:SUMMARY_HEAD_CHARS]}\n"
+            f"--- end ---"
         )
-        head_budget = SUMMARY_BUDGET - len(meta) - len("\n--- end ---")
-        if head_budget < 0:
-            head_budget = 0
-        summary = meta + output[:head_budget] + "\n--- end ---"
-        if len(summary) > SUMMARY_BUDGET:
-            summary = summary[:SUMMARY_BUDGET]
 
         print(f"\033[33m[Tool result persisted: {len(output)} chars -> {file_path}]\033[0m")
         return summary
