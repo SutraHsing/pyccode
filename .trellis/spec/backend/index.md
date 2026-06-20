@@ -1,38 +1,24 @@
 # Backend Development Guidelines
 
-> Best practices for backend development in this project.
+> Coding specs for `pyccode.py`. Read the relevant file before editing that area.
 
 ---
 
-## Overview
+## File Map
 
-This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
-
----
-
-## Guidelines Index
-
-| Guide | Description | Status |
-|-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
-| [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | To fill |
-| [Error Handling](./error-handling.md) | Error types, handling strategies | To fill |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
-| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
+| Guide | Scope | When to Read |
+|---|---|---|
+| [Directory Structure](./directory-structure.md) | Project + `pyccode.py` layout | Before inserting new code anywhere |
+| [Tool Handlers](./tool-handlers.md) | Handler contract, signature, anti-patterns | Before adding or editing a `handle_*` function |
+| [Chat Loop](./chat-loop.md) | Agentic loop invariants, tool result persistence, skill injection | Before editing `chat()` or `handle_subagent()` |
+| [Error Handling](./error-handling.md) | Error-return convention, subagent isolation | Before adding error paths |
+| [Logging Guidelines](./logging-guidelines.md) | print / ANSI conventions, prefix table | Before adding operator-facing output |
+| [Quality Guidelines](./quality-guidelines.md) | Required + forbidden patterns, code review checklist | Before any non-trivial edit |
 
 ---
 
-## How to Fill These Guidelines
+## Out of Scope
 
-For each guideline file:
-
-1. Document your project's **actual conventions** (not ideals)
-2. Include **code examples** from your codebase
-3. List **forbidden patterns** and why
-4. Add **common mistakes** your team has made
-
-The goal is to help AI assistants and new team members understand how YOUR project works.
-
----
-
-**Language**: All documentation should be written in **English**.
+- Database specs. pyccode has no database; the template `database-guidelines.md` was removed.
+- Testing framework. There is no test suite; see [quality-guidelines.md](./quality-guidelines.md) for the smoke-test contract.
+- Structured logging. See [logging-guidelines.md](./logging-guidelines.md) — pyccode uses plain `print`.
