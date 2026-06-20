@@ -73,3 +73,36 @@ Ran trellis-spec-bootstrap to fill .trellis/spec/backend/ from real source: 6 co
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Enforce per-message tool_result budget
+
+**Date**: 2026-06-20
+**Task**: Enforce per-message tool_result budget
+**Branch**: `main`
+
+### Summary
+
+Added enforceToolResultBudget: a per-message pass that runs after maybePersistLargeToolResult. When total len(content) across tool_result blocks exceeds TOOL_RESULT_MESSAGE_BUDGET (200K chars), persists largest-first via shared _persist_tool_result helper, skipping already-small results (<= 2 * SUMMARY_HEAD_CHARS). Extracted _persist_tool_result so per-result and per-message passes share one disk-write path. Wired into both chat() and handle_subagent(). Spec chat-loop.md rewritten to document the two-layer model.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `01edb7b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

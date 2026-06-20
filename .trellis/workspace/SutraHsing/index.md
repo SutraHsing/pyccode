@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 2
+- **Total Sessions**: 3
 - **Last Active**: 2026-06-20
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~75 | Active |
+| `journal-1.md` | ~108 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 3 | 2026-06-20 | Enforce per-message tool_result budget | `01edb7b` | `main` |
 | 2 | 2026-06-20 | Bootstrap backend specs from pyccode.py | `d246426`, `ee68c7c` | `main` |
 | 1 | 2026-06-20 | Persist oversized tool results to file | `5fa5284`, `a3580bf` | `main` |
 <!-- @@@/auto:session-history -->
