@@ -8,6 +8,7 @@ A single-file AI agent CLI that uses the Anthropic Messages API with multi-tool 
 - **Skill loading**: Auto-discovers `skills/*/SKILL.md` files and lets the agent load detailed instructions on demand
 - **Subagent system**: Delegate complex subtasks to isolated in-process agents
 - **Task tracking**: Built-in todo list with pending/in_progress/completed states
+- **Large output persistence**: Tool results over 50K chars are written to `WORKDIR/<sessionId>/tool-results/<id>.{txt|json}` and replaced in the conversation with a ~2KB head-only summary, so the agent can re-inspect the full output via any tool (read, grep, bash) without bloating history
 - **Anthropic-compatible**: Works with any provider supporting the Anthropic Messages API
 
 ## Installation

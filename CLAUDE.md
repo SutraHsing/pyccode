@@ -34,6 +34,8 @@ Everything lives in `pyccode.py`. Key components:
 - **`handle_bash`**, **`handle_read`**, **`handle_write`**, **`handle_edit`**, **`handle_todo`**, **`handle_skill`**, **`handle_subagent`** — Tool handler functions
 - **`handle_skill`** — Returns a skill's full markdown instructions and absolute skill directory path, so the agent can load domain-specific guidance and nearby reference files on demand.
 - **`handle_subagent`** — In-process sub-agent: creates its own conversation loop with isolated `TaskStore`, uses `_BASE_SYSTEM` and `TOOLS` (including `skill`, but no `SUBAGENT_TOOL` to prevent recursion). Swaps the global `_task_store` and restores it in a `finally` block.
+- **`maybePersistLargeToolResult`** — Called from both `chat()` and `handle_subagent()` before sending a `tool_result`. Outputs over `LARGE_TOOL_RESULT_THRESHOLD` (50K chars) are written in full to `WORKDIR / SESSION_ID / "tool-results" / <id>.{txt|json}` (extension auto-sniffed via `json.loads`) and replaced in the conversation with a head-only `SUMMARY_BUDGET`-byte (2K) summary pointing at the persisted file. Under-threshold outputs pass through unchanged; filesystem failure falls back to legacy 50K truncation with an error note.
+- **`SESSION_ID`** — Process-level `uuid4().hex`, shared by the main agent and all subagents, scoping the persisted-results directory.
 - **`chat(prompt, history)`** — Core agentic loop: sends messages to the API, dispatches tool calls via `TOOL_HANDLERS`, feeds results back iteratively until `end_turn`. Handles `max_tokens` truncation by injecting "Continue where you left off." Manages conversation history with tool_use/tool_result blocks. On the first message, injects available skill names and descriptions from `SKILLS`. Includes a round-counter that injects a reminder to use `TodoWrite` after 5 consecutive tool-use rounds without task tracking.
 - **`main()`** — CLI entry point. Dispatches to single-prompt or interactive REPL mode.
 
@@ -47,7 +49,7 @@ Requires a `.env` file with:
 
 ## Key Implementation Details
 
-- Bash commands run via `subprocess.run` with `shell=True`, 300s timeout, output truncated to 50k chars
+- Bash commands run via `subprocess.run` with `shell=True`, 300s timeout
 - Read tool returns file contents with line numbers, supports offset/limit for partial reads
 - Write tool creates parent directories automatically, overwrites existing files
 - Edit tool does exact string matching (including whitespace), replaces **all** occurrences of `old_string`
@@ -56,7 +58,7 @@ Requires a `.env` file with:
 - Subagent runs in-process (not a shell spawn), gets isolated context — only the prompt passed to it, no shared conversation history
 - After 5 tool-use rounds without using `TodoWrite`, a reminder is injected into the conversation history
 - Conversation history is accumulated in-memory as a list of message dicts
-- Tool outputs are truncated to 50k chars before being sent back to the API
+- Tool outputs over 50K chars are persisted to `WORKDIR/<sessionId>/tool-results/<id>.{txt|json}` and replaced in the conversation with a ~2KB head-only summary pointing at the file; under-50K outputs pass through unchanged
 - The entry point is registered as `pyccode = "pyccode:main"` in `pyproject.toml`
 - Python >=3.12 required
 
