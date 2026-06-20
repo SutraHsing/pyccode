@@ -8,7 +8,7 @@
 
 Tool handlers do not raise. Errors are returned as `"Error: <description>"` strings, and the agent decides how to react. This is the load-bearing contract of the whole project.
 
-Pattern (see `handle_read` pyccode.py:323, `handle_edit` pyccode.py:398):
+Pattern (see `handle_read` and `handle_edit`):
 
 ```python
 try:
@@ -32,7 +32,7 @@ Rules:
 
 ## Bash Handler Exception
 
-`handle_bash` (pyccode.py:293) cannot enumerate every failure mode. It captures `subprocess.run` stdout + stderr and lets the model interpret. Only `TimeoutExpired` is converted explicitly:
+`handle_bash` cannot enumerate every failure mode. It captures `subprocess.run` stdout + stderr and lets the model interpret. Only `TimeoutExpired` is converted explicitly:
 
 ```python
 except subprocess.TimeoutExpired:
@@ -49,13 +49,13 @@ output = output.encode('utf-8', errors='replace').decode('utf-8')
 
 ## Persistence Failure
 
-`maybePersistLargeToolResult` (pyccode.py:559) wraps its filesystem work in `try` / `except`. On failure, it returns the legacy 50K truncation with `[persist failed: <error>]` appended. Persistence errors never propagate into the chat loop.
+`_persist_tool_result` wraps its filesystem work in `try` / `except`. On failure, it returns the legacy 50K truncation with `[persist failed: <error>]` appended. Persistence errors never propagate into the chat loop. Both `maybePersistLargeToolResult` and `enforceToolResultBudget` inherit this behavior because they delegate to `_persist_tool_result`.
 
 ---
 
 ## Subagent Isolation
 
-`handle_subagent` (pyccode.py:460) swaps `_task_store` inside a `try` and restores it in `finally`. If the sub-agent raises mid-loop, the main agent's task store survives. Any new global swap must follow the same pattern.
+`handle_subagent` swaps `_task_store` inside a `try` and restores it in `finally`. If the sub-agent raises mid-loop, the main agent's task store survives. Any new global swap must follow the same pattern.
 
 ---
 

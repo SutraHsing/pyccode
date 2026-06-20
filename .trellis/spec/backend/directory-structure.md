@@ -8,7 +8,7 @@
 
 ```
 pyccode/
-├── pyccode.py              # all application code (~750 lines)
+├── pyccode.py              # all application code
 ├── pyproject.toml          # entry point: pyccode = "pyccode:main"
 ├── uv.lock                 # dependency lock
 ├── .env                    # ANTHROPIC_BASE_URL / ANTHROPIC_API_KEY / MODEL_NAME / ANTHROPIC_TIMEOUT
@@ -25,23 +25,21 @@ There is no package hierarchy. Everything ships in `pyccode.py`.
 
 ## Module Ordering Inside `pyccode.py`
 
-Top-to-bottom order is load-bearing — earlier sections define names used later. Preserve this layout when inserting new code.
+Top-to-bottom order is load-bearing — earlier sections define names used later. Preserve this ordering when inserting new code.
 
-| Lines (approx) | Section | Purpose |
-|---|---|---|
-| 1–21 | Imports + module constants | `json`, `os`, `re`, `subprocess`, `sys`, `uuid`, dataclass, Path, yaml, Anthropic, dotenv. Then `WORKDIR`, `SESSION_ID`, `LARGE_TOOL_RESULT_THRESHOLD`, `SUMMARY_HEAD_CHARS`, `TOOL_RESULT_MESSAGE_BUDGET`. |
-| 23–29 | `_BASE_SYSTEM`, `SYSTEM` | Two-tier system prompt. Subagents get `_BASE_SYSTEM` only. |
-| 31–52 | `TODO_WRITE_TOOL_DESCRIPTION` | Long description kept out of the schema literal for readability. |
-| 54–182 | `TOOLS`, `SUBAGENT_TOOL` | Anthropic tool-use schemas. `SUBAGENT_TOOL` is separate; only the main agent gets `TOOLS + [SUBAGENT_TOOL]`. |
-| 184–212 | Env config + Anthropic client | `load_dotenv(override=True)`, timeout from env, `client = Anthropic(...)`. |
-| 228–259 | `Task`, `TaskStore` | In-memory todo tracking. |
-| 261 | `_task_store` | Module-global; swapped by `handle_subagent`. |
-| 261–292 | `load_skills()` + `SKILLS` | Auto-discovery of `skills/*/SKILL.md`. |
-| 294–558 | Tool handlers | `handle_bash`, `handle_read`, `handle_write`, `handle_edit`, `handle_todo`, `handle_subagent`, `handle_skill`. |
-| 560–669 | Tool result persistence | `_persist_tool_result` (disk-write + preview builder), `maybePersistLargeToolResult` (per-result wrapper, >50K), `enforceToolResultBudget` (per-message wrapper, >200K total). |
-| 671–679 | `TOOL_HANDLERS` | Dispatch dict. Defined AFTER all handlers so all names resolve. |
-| 682–780 | `chat(prompt, history)` | Core agentic loop. |
-| 782–end | `main()` | CLI entry: single-prompt vs REPL. |
+1. **Imports + module constants** — `json`, `os`, `re`, `subprocess`, `sys`, `uuid`, dataclass, Path, yaml, Anthropic, dotenv. Then `WORKDIR`, `SESSION_ID`, `LARGE_TOOL_RESULT_THRESHOLD`, `SUMMARY_HEAD_CHARS`, `TOOL_RESULT_MESSAGE_BUDGET`.
+2. **`_BASE_SYSTEM`, `SYSTEM`** — Two-tier system prompt. Subagents get `_BASE_SYSTEM` only.
+3. **`TODO_WRITE_TOOL_DESCRIPTION`** — Long description kept out of the schema literal for readability.
+4. **`TOOLS`, `SUBAGENT_TOOL`** — Anthropic tool-use schemas. `SUBAGENT_TOOL` is separate; only the main agent gets `TOOLS + [SUBAGENT_TOOL]`.
+5. **Env config + Anthropic client** — `load_dotenv(override=True)`, timeout from env, `client = Anthropic(...)`.
+6. **`Task`, `TaskStore`** — In-memory todo tracking.
+7. **`_task_store`** — Module-global; swapped by `handle_subagent`.
+8. **`load_skills()` + `SKILLS`** — Auto-discovery of `skills/*/SKILL.md`.
+9. **Tool handlers** — `handle_bash`, `handle_read`, `handle_write`, `handle_edit`, `handle_todo`, `handle_subagent`, `handle_skill`.
+10. **Tool result persistence** — `_persist_tool_result` (disk-write + preview builder), `maybePersistLargeToolResult` (per-result wrapper, >50K), `enforceToolResultBudget` (per-message wrapper, >200K total).
+11. **`TOOL_HANDLERS`** — Dispatch dict. Defined AFTER all handlers so all names resolve.
+12. **`chat(prompt, history)`** — Core agentic loop.
+13. **`main()`** — CLI entry: single-prompt vs REPL.
 
 ---
 

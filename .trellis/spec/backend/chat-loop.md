@@ -1,6 +1,6 @@
 # Chat Loop Invariants
 
-> `chat(prompt, history)` (pyccode.py:628) and `handle_subagent` (pyccode.py:460) share the same agentic shape. This spec lists the invariants both must preserve.
+> `chat(prompt, history)` and `handle_subagent` share the same agentic shape. This spec lists the invariants both must preserve.
 
 ---
 
@@ -46,14 +46,13 @@ history.append({role: user, content: results})
 
 Triggered per result when `len(output) > LARGE_TOOL_RESULT_THRESHOLD` (50K
 chars). Writes the full output to disk, replaces with a ~2.2KB preview.
-See pyccode.py:600.
 
 ### Layer 2 — `enforceToolResultBudget` (per message)
 
 Triggered per message when the sum of `len(content)` across all
 `tool_result` blocks exceeds `TOOL_RESULT_MESSAGE_BUDGET` (200K chars).
 Sorts results by content size descending and persists largest-first via
-`_persist_tool_result` until the total fits. See pyccode.py:626.
+`_persist_tool_result` until the total fits.
 
 Skip heuristic: results with `len(content) <= 2 * SUMMARY_HEAD_CHARS`
 (4KB) are left alone — re-persisting would not shrink them (they may
@@ -94,13 +93,13 @@ Available skills:
 </system-reminder>
 ```
 
-Applied in `chat()` (pyccode.py:644) and `handle_subagent` (pyccode.py:503). When adding a new injection point, mirror this exact wrapper.
+Applied in `chat()` and `handle_subagent`. When adding a new injection point, mirror this exact wrapper.
 
 ---
 
 ## Round-Counter Reminder (main agent only)
 
-After 5 consecutive tool-use rounds without a `TodoWrite` call, `chat()` injects a user message nudging the model to plan. Counter resets to 0 on any `TodoWrite` call. See pyccode.py:708.
+After 5 consecutive tool-use rounds without a `TodoWrite` call, `chat()` injects a user message nudging the model to plan. Counter resets to 0 on any `TodoWrite` call.
 
 `handle_subagent` does NOT have this counter — subagent tasks are short by design.
 

@@ -6,7 +6,7 @@
 
 ## Required Patterns
 
-- **Google-style docstring on every handler.** One-line summary, then `Args:` / `Returns:`. See `handle_read` (pyccode.py:323) as the reference.
+- **Google-style docstring on every handler.** One-line summary, then `Args:` / `Returns:`. See `handle_read` as the reference.
 - **Handler signature `def handle_<name>(input: dict) -> str`**. No kwargs, no optional params. Register in `TOOL_HANDLERS` after definition.
 - **Tool schema and handler kept in sync.** Adding a tool means three edits: schema in `TOOLS`, handler function, entry in `TOOL_HANDLERS`. Forgetting any one fails silently or loudly.
 - **Constants at the top.** No module-level mutable state except `_task_store` (which has documented swap semantics in `handle_subagent`).
@@ -22,6 +22,7 @@
 - **New package dependencies** without updating `pyproject.toml` and `uv.lock`.
 - **Splitting `pyccode.py` into modules.** Single-file is a design constraint, not an accident.
 - **Backwards-compat shims.** The project has no external consumers; rename freely.
+- **Line-number references in specs.** They rot on every edit. Reference symbols (function / class / constant names) or section headings instead.
 
 ---
 
@@ -55,3 +56,4 @@ Any change that breaks the above is not shippable.
 - [ ] If adding a tool: schema + handler + dispatch entry all present.
 - [ ] No new package without `pyproject.toml` + `uv.lock` update.
 - [ ] New operator-facing output reuses an existing prefix from [logging-guidelines.md](./logging-guidelines.md) or extends the table.
+- [ ] New spec docs reference symbols, not line numbers.

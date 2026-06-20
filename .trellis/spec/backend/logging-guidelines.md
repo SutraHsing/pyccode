@@ -16,16 +16,16 @@ Every handler prints at least one yellow (`\033[33m`) status line before doing i
 
 | Prefix | Where | Example |
 |---|---|---|
-| `$ <cmd>` | `handle_bash` (pyccode.py:295) | `$ ls -la` |
-| `Read: <path>` | `handle_read` (pyccode.py:330) | `Read: /tmp/foo.txt` |
-| `Write: <path>` | `handle_write` (pyccode.py:374) | `Write: src/app.py` |
-| `Edit: <path>` | `handle_edit` (pyccode.py:408) | `Edit: pyccode.py` |
-| `Todo: updated <N> task(s)` | `handle_todo` (pyccode.py:446) | `Todo: updated 3 task(s)` |
-| `[Subagent] <prompt-preview>` | `handle_subagent` (pyccode.py:466) | `[Subagent] explore src/...` |
-| `[Subagent] Done` | `handle_subagent` (pyccode.py:509) | end-of-loop marker |
-| `Skill: <name>` | `handle_skill` (pyccode.py:552) | `Skill: commit` |
-| `[Tool result persisted: <N> chars -> <path>]` | `maybePersistLargeToolResult` (pyccode.py:609) | persistence notice |
-| `Error: <message>` | unknown-tool branch (pyccode.py:698) | `Error: Unknown tool: foo` |
+| `$ <cmd>` | `handle_bash` | `$ ls -la` |
+| `Read: <path>` | `handle_read` | `Read: /tmp/foo.txt` |
+| `Write: <path>` | `handle_write` | `Write: src/app.py` |
+| `Edit: <path>` | `handle_edit` | `Edit: pyccode.py` |
+| `Todo: updated <N> task(s)` | `handle_todo` | `Todo: updated 3 task(s)` |
+| `[Subagent] <prompt-preview>` | `handle_subagent` (start) | `[Subagent] explore src/...` |
+| `[Subagent] Done` | `handle_subagent` (end) | end-of-loop marker |
+| `Skill: <name>` | `handle_skill` | `Skill: commit` |
+| `[Tool result persisted: <N> chars -> <path>]` | `_persist_tool_result` | persistence notice |
+| `Error: <message>` | `chat()` (unknown-tool branch) | `Error: Unknown tool: foo` |
 
 Cyan (`\033[36m`) is reserved for the REPL prompt (`>> `). Reset with `\033[0m` on the same line.
 

@@ -20,7 +20,7 @@ No handler raises. Errors are returned as `"Error: ..."` strings so the agent ca
 
 ## Required Skeleton
 
-Every handler follows the same shape (see `handle_read` at pyccode.py:323, `handle_write` at pyccode.py:367):
+Every handler follows the same shape (see `handle_read` and `handle_write`):
 
 ```python
 def handle_<name>(input: dict) -> str:
@@ -76,4 +76,4 @@ Handlers return the full output. Size reduction is the chat loop's job, not the 
 
 ## Subagent Handler Exception
 
-`handle_subagent` (pyccode.py:460) is the one handler that breaks the shape above: it runs its own agentic loop, manages its own message list, and returns the sub-agent's final text rather than a status string. It also swaps `_task_store` inside a `try` / `finally`. Do not collapse it into the standard skeleton.
+`handle_subagent` is the one handler that breaks the shape above: it runs its own agentic loop, manages its own message list, and returns the sub-agent's final text rather than a status string. It also swaps `_task_store` inside a `try` / `finally`. Do not collapse it into the standard skeleton.
