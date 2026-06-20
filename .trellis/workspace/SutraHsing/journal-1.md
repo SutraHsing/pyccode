@@ -106,3 +106,36 @@ Added enforceToolResultBudget: a per-message pass that runs after maybePersistLa
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: Replace line-number refs with symbol refs in spec
+
+**Date**: 2026-06-20
+**Task**: Replace line-number refs with symbol refs in spec
+**Branch**: `main`
+
+### Summary
+
+Removed all pyccode.py:NNN references from .trellis/spec/backend/*.md (22 refs across 6 files). Restructured directory-structure.md from a line-range table to an ordered list of sections by name. Added 'no line-number references in specs' rule to quality-guidelines.md code review checklist so future specs stay clean. Symbol names are stable across edits; line numbers were not.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `beb4217` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
