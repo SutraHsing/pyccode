@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/chat-loop.md", "reason": "Verify the three-layer model is documented end-to-end and microcompactMessages integration point (before API call) is clear"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Code review checklist — docstring, no output[:50000], symbol refs only in spec, no line numbers"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Confirm top-level try/except returns history on any failure so chat loop is unaffected"}

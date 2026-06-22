@@ -19,6 +19,10 @@ SESSION_ID = uuid.uuid4().hex
 LARGE_TOOL_RESULT_THRESHOLD = 50000   # chars
 SUMMARY_HEAD_CHARS = 2000              # fixed head slice; meta + end marker keeps total ~2.2KB
 TOOL_RESULT_MESSAGE_BUDGET = 200_000   # chars; per-message cap enforced by enforceToolResultBudget
+MICROCOMPACT_MAX_TOOL_RESULTS = 10     # trigger threshold (uncleared compactable count)
+MICROCOMPACT_KEEP_RECENT = 5           # number of recent uncleared results to preserve
+COMPACTABLE_TOOLS = frozenset({"bash", "read", "write", "edit", "TodoWrite", "skill"})
+OLD_TOOL_RESULT_PLACEHOLDER = "[Old tool result content cleared]"
 
 _BASE_SYSTEM = f"""You are a helpful AI Agent at {WORKDIR} with some bash tools.
 Rules:
@@ -490,6 +494,7 @@ def handle_subagent(input: dict) -> str:
         messages = [{"role": "user", "content": prompt}]
 
         while True:
+            microcompactMessages(messages)
             response = client.messages.create(
                 model=os.environ.get("MODEL_NAME", "claude-sonnet-4-5-20250929"),
                 max_tokens=16384,
@@ -667,6 +672,79 @@ def enforceToolResultBudget(results: list) -> list:
     return results
 
 
+def microcompactMessages(history: list) -> list:
+    """Clear old reproducible tool_result contents from conversation history.
+
+    Triggered when the count of **uncleared compactable** ``tool_result``
+    blocks exceeds ``MICROCOMPACT_MAX_TOOL_RESULTS``. Leaves the most
+    recent ``MICROCOMPACT_KEEP_RECENT`` uncleared compactable blocks
+    intact and replaces the older ones' ``content`` with
+    ``OLD_TOOL_RESULT_PLACEHOLDER``.
+
+    Compactable tools (``COMPACTABLE_TOOLS``) are those whose output the
+    agent can reproduce by re-invoking the tool — file reads, bash, etc.
+    ``run_subagent`` is excluded because sub-agent outputs are one-shot.
+
+    Counts only uncleared blocks (content != placeholder), so compaction
+    fires in batches roughly every ``MAX - KEEP_RECENT`` turns rather
+    than every turn. This batches prefix-cache invalidation events.
+
+    Runs once per turn before the API call in both ``chat()`` and
+    ``handle_subagent()``. Mutates history in place. Never raises: any
+    internal error returns history unchanged so the chat loop is
+    unaffected.
+
+    Args:
+        history: Conversation history as a list of message dicts.
+
+    Returns:
+        The same ``history`` reference (mutated in place).
+    """
+    try:
+        # tool_result blocks carry only tool_use_id; recover name from the matching tool_use.
+        tool_use_index = {}
+        for msg in history:
+            if not isinstance(msg, dict) or msg.get("role") != "assistant":
+                continue
+            content = msg.get("content")
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "tool_use":
+                    tool_use_index[block.get("id")] = block.get("name")
+
+        uncleared_compactable = []
+        for msg_idx, msg in enumerate(history):
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content")
+            if not isinstance(content, list):
+                continue
+            for block_idx, block in enumerate(content):
+                if not isinstance(block, dict) or block.get("type") != "tool_result":
+                    continue
+                if block.get("content") == OLD_TOOL_RESULT_PLACEHOLDER:
+                    continue
+                tool_name = tool_use_index.get(block.get("tool_use_id"))
+                if tool_name in COMPACTABLE_TOOLS:
+                    uncleared_compactable.append((msg_idx, block_idx))
+
+        if len(uncleared_compactable) <= MICROCOMPACT_MAX_TOOL_RESULTS:
+            return history
+
+        to_compact = (
+            uncleared_compactable[:-MICROCOMPACT_KEEP_RECENT]
+            if MICROCOMPACT_KEEP_RECENT > 0
+            else uncleared_compactable
+        )
+        for msg_idx, block_idx in to_compact:
+            history[msg_idx]["content"][block_idx]["content"] = OLD_TOOL_RESULT_PLACEHOLDER
+
+        return history
+    except Exception:
+        return history
+
+
 # Maps tool names to their handler functions.
 TOOL_HANDLERS = {
     "bash": handle_bash,
@@ -707,6 +785,7 @@ def chat(prompt, history=None):
 
     while True:
         # 1. Model Chat
+        microcompactMessages(history)
         response = client.messages.create(
             model=os.environ.get("MODEL_NAME", "claude-sonnet-4-5-20250929"),
             max_tokens=16384,

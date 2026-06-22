@@ -31,16 +31,24 @@ while True:
 
 ## Tool Result Size Cap
 
-Two-layer model. Both layers share `_persist_tool_result` (the disk-write +
-preview builder); the wrappers decide when to call it.
+Three-layer model. Layers 1 and 2 are size-based and share
+`_persist_tool_result` (the disk-write + preview builder). Layer 3 is
+count-based and clears contents in place.
 
 ```
-for each tool_use:
-    content = maybePersistLargeToolResult(id, output)   # layer 1: per-result (>50K)
+[turn N starts]
+  microcompactMessages(history)                          # layer 3: count cap, whole history
+  response = client.messages.create(...)
+  for each tool_use:
+    content = maybePersistLargeToolResult(id, output)    # layer 1: per-result (>50K)
     results.append({tool_result, content})
-results = enforceToolResultBudget(results)              # layer 2: per-message (>200K total)
-history.append({role: user, content: results})
+  results = enforceToolResultBudget(results)             # layer 2: per-message (>200K total)
+  history.append({role: user, content: results})
+[turn N+1 starts]
 ```
+
+Layer 3 runs first because it has the broadest scope (whole history) and
+does not depend on the current turn's results.
 
 ### Layer 1 — `maybePersistLargeToolResult` (per result)
 
@@ -60,7 +68,26 @@ already be Layer-1 summaries, or genuinely small). Since the iteration
 is sorted by size descending, hitting one small result means all
 remaining are also small, so the loop `break`s rather than `continue`s.
 
-### Shared rules
+### Layer 3 — `microcompactMessages` (per turn, whole history)
+
+Triggered per turn when the count of **uncleared compactable**
+`tool_result` blocks exceeds `MICROCOMPACT_MAX_TOOL_RESULTS` (10). Leaves
+the most recent `MICROCOMPACT_KEEP_RECENT` (5) uncleared compactable
+blocks intact and replaces older ones' `content` with
+`OLD_TOOL_RESULT_PLACEHOLDER` (`"[Old tool result content cleared]"`).
+
+- **Uncleared** = `content != OLD_TOOL_RESULT_PLACEHOLDER`. Already-cleared
+  blocks don't count toward the threshold; this batches compaction so it
+  fires roughly every `MAX - KEEP_RECENT` turns instead of every turn.
+- **Compactable** = tool name in `COMPACTABLE_TOOLS`
+  (`{bash, read, write, edit, TodoWrite, skill}`). `run_subagent` is
+  excluded — sub-agent outputs are one-shot and cannot be reproduced.
+- Tool name is recovered from the matching `tool_use` block by scanning
+  assistant messages for the `tool_use_id`.
+- Whole body wrapped in `try/except` returning history unchanged on any
+  failure; chat loop must never crash due to compaction.
+
+### Shared rules (Layers 1 and 2)
 
 - File layout: `WORKDIR / SESSION_ID / "tool-results" / <safe_id>.{txt|json}`.
 - Extension sniffed via `json.loads` — `.json` if valid, otherwise `.txt`.
@@ -78,8 +105,8 @@ remaining are also small, so the loop `break`s rather than `continue`s.
 inside `_persist_tool_result`'s error fallback. It silently drops the
 tail with no recovery path.
 
-Both `chat()` and `handle_subagent()` must run both layers. Adding a new
-agentic loop means inheriting the same contract.
+Both `chat()` and `handle_subagent()` must run all three layers. Adding
+a new agentic loop means inheriting the same contract.
 
 ---
 
