@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
-- **Last Active**: 2026-06-20
+- **Total Sessions**: 5
+- **Last Active**: 2026-06-22
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~141 | Active |
+| `journal-1.md` | ~174 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-06-22 | Microcompact old reproducible tool results in history | `fa36ef1` | `main` |
 | 4 | 2026-06-20 | Replace line-number refs with symbol refs in spec | `beb4217` | `main` |
 | 3 | 2026-06-20 | Enforce per-message tool_result budget | `01edb7b` | `main` |
 | 2 | 2026-06-20 | Bootstrap backend specs from pyccode.py | `d246426`, `ee68c7c` | `main` |

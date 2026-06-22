@@ -139,3 +139,36 @@ Removed all pyccode.py:NNN references from .trellis/spec/backend/*.md (22 refs a
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Microcompact old reproducible tool results in history
+
+**Date**: 2026-06-22
+**Task**: Microcompact old reproducible tool results in history
+**Branch**: `main`
+
+### Summary
+
+Added Layer 3 of context management: count-based cap on uncleared compactable tool_result blocks across whole history. When uncleared count > 10, oldest are replaced with [Old tool result content cleared] placeholder, keeping most recent 5 intact. Trigger counts only uncleared blocks so compaction batches every MAX-KEEP turns instead of every turn (fewer prefix-cache invalidation events). Compactable tools: bash, read, write, edit, TodoWrite, skill; run_subagent excluded (one-shot). Tool name recovered from matching tool_use block via tool_use_id (tool_result lacks name field). Wired into chat() and handle_subagent() before each API call. Whole body wrapped in try/except so chat loop never crashes on compaction.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fa36ef1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
