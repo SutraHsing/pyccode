@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/chat-loop.md", "reason": "Remove tool-results/ references; document raw_tool_result transcript entry type and recovery pattern"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Drop tool-results/ from layout; update _persist_tool_result description to mention transcript"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Persistence failure section: failure point shifts from file write to transcript append, but fallback semantics identical"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Code review checklist — no output[:50000] reintroduced, docstring present, symbol refs (no line numbers)"}

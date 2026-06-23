@@ -89,7 +89,7 @@ blocks intact and replaces older ones' `content` with
 
 ### Shared rules (Layers 1 and 2)
 
-- File layout: `WORKDIR / SESSION_ID / "tool-results" / <safe_id>.{txt|json}`.
+- File layout: `TOOL_RESULTS_DIR / <safe_id>.{txt|json}` where `TOOL_RESULTS_DIR = ~/.pyccode/projects/<sanitized-cwd>/<sessionId>/tool-results/`. Sibling of the transcript file (`<sanitized-cwd>/<sessionId>.jsonl`); never written inside `WORKDIR`.
 - Extension sniffed via `json.loads` — `.json` if valid, otherwise `.txt`.
 - `id` sanitized with `re.sub(r'[^A-Za-z0-9_-]', '_', tool_use_id)`.
 - Preview format: head-only `SUMMARY_HEAD_CHARS` (2000) slice + small
@@ -175,10 +175,10 @@ transcript-logging task's design doc for details.
 
 ### Future Optimization (deferred)
 
-Layer 1's `WORKDIR/<sessionId>/tool-results/<id>.{txt|json}` files
-could be replaced by "recovery pointers" into the transcript (changing
-the write order to "transcript first, then summary"). Single source of
-truth for conversation history. Out of scope for MVP.
+Layer 1's `~/.pyccode/projects/<sanitized-cwd>/<sessionId>/tool-results/<id>.{txt|json}`
+files could be replaced by "recovery pointers" into the transcript
+(changing the write order to "transcript first, then summary"). Single
+source of truth for conversation history. Out of scope for MVP.
 
 ---
 

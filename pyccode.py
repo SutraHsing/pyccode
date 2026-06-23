@@ -28,6 +28,7 @@ TRANSCRIPT_VERSION = "0.1.0"
 TRANSCRIPT_DIR = Path.home() / ".pyccode" / "projects"
 TRANSCRIPT_CWD = re.sub(r'[^A-Za-z0-9._-]', '-', str(WORKDIR))
 TRANSCRIPT_PATH = TRANSCRIPT_DIR / TRANSCRIPT_CWD / f"{SESSION_ID}.jsonl"
+TOOL_RESULTS_DIR = TRANSCRIPT_DIR / TRANSCRIPT_CWD / SESSION_ID / "tool-results"
 _transcript_last_uuid = None
 
 _BASE_SYSTEM = f"""You are a helpful AI Agent at {WORKDIR} with some bash tools.
@@ -587,9 +588,8 @@ def _persist_tool_result(tool_use_id: str, output: str) -> str:
             ext = "txt"
 
         safe_id = re.sub(r'[^A-Za-z0-9_-]', '_', tool_use_id)
-        result_dir = WORKDIR / SESSION_ID / "tool-results"
-        result_dir.mkdir(parents=True, exist_ok=True)
-        file_path = result_dir / f"{safe_id}.{ext}"
+        TOOL_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        file_path = TOOL_RESULTS_DIR / f"{safe_id}.{ext}"
         file_path.write_text(output, encoding='utf-8')
 
         summary = (

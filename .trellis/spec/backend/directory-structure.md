@@ -21,13 +21,33 @@ pyccode/
 
 There is no package hierarchy. Everything ships in `pyccode.py`.
 
+### On-Disk Artifacts Outside the Project
+
+pyccode writes session-scoped artifacts under `~/.pyccode/`, never inside
+the project directory:
+
+```
+~/.pyccode/projects/<sanitized-cwd>/
+├── <sessionId>.jsonl              # transcript (append-only conversation log)
+└── <sessionId>/
+    └── tool-results/
+        ├── <safe_id>.txt          # full output for >50K or budget-persisted results
+        └── <safe_id>.json
+```
+
+`<sanitized-cwd>` collapses non-`[A-Za-z0-9._-]` in `str(WORKDIR)` to
+`-`. `<sessionId>` is a process-level `uuid4().hex` that doubles as
+both the transcript filename stem and the tool-results directory name
+(filesystems allow a file and directory with the same stem to
+coexist).
+
 ---
 
 ## Module Ordering Inside `pyccode.py`
 
 Top-to-bottom order is load-bearing — earlier sections define names used later. Preserve this ordering when inserting new code.
 
-1. **Imports + module constants** — `json`, `os`, `re`, `subprocess`, `sys`, `uuid`, dataclass, datetime, Path, yaml, Anthropic, dotenv. Then `WORKDIR`, `SESSION_ID`, `LARGE_TOOL_RESULT_THRESHOLD`, `SUMMARY_HEAD_CHARS`, `TOOL_RESULT_MESSAGE_BUDGET`, `MICROCOMPACT_MAX_TOOL_RESULTS`, `MICROCOMPACT_KEEP_RECENT`, `COMPACTABLE_TOOLS`, `OLD_TOOL_RESULT_PLACEHOLDER`, `TRANSCRIPT_VERSION`, `TRANSCRIPT_DIR`, `TRANSCRIPT_CWD`, `TRANSCRIPT_PATH`, `_transcript_last_uuid`.
+1. **Imports + module constants** — `json`, `os`, `re`, `subprocess`, `sys`, `uuid`, dataclass, datetime, Path, yaml, Anthropic, dotenv. Then `WORKDIR`, `SESSION_ID`, `LARGE_TOOL_RESULT_THRESHOLD`, `SUMMARY_HEAD_CHARS`, `TOOL_RESULT_MESSAGE_BUDGET`, `MICROCOMPACT_MAX_TOOL_RESULTS`, `MICROCOMPACT_KEEP_RECENT`, `COMPACTABLE_TOOLS`, `OLD_TOOL_RESULT_PLACEHOLDER`, `TRANSCRIPT_VERSION`, `TRANSCRIPT_DIR`, `TRANSCRIPT_CWD`, `TRANSCRIPT_PATH`, `TOOL_RESULTS_DIR`, `_transcript_last_uuid`.
 2. **`_BASE_SYSTEM`, `SYSTEM`** — Two-tier system prompt. Subagents get `_BASE_SYSTEM` only.
 3. **`TODO_WRITE_TOOL_DESCRIPTION`** — Long description kept out of the schema literal for readability.
 4. **`TOOLS`, `SUBAGENT_TOOL`** — Anthropic tool-use schemas. `SUBAGENT_TOOL` is separate; only the main agent gets `TOOLS + [SUBAGENT_TOOL]`.

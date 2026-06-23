@@ -9,7 +9,7 @@ A single-file AI agent CLI that uses the Anthropic Messages API with multi-tool 
 - **Subagent system**: Delegate complex subtasks to isolated in-process agents
 - **Task tracking**: Built-in todo list with pending/in_progress/completed states
 - **Three-layer context management**:
-  - **Per result (>50K chars)**: written to `WORKDIR/<sessionId>/tool-results/<id>.{txt|json}` and replaced in conversation with a ~2KB head-only summary
+  - **Per result (>50K chars)**: written to `~/.pyccode/projects/<sanitized-cwd>/<sessionId>/tool-results/<id>.{txt|json}` (never inside the project) and replaced in conversation with a ~2KB head-only summary
   - **Per message (>200K chars total)**: largest results persisted first until under budget
   - **Per turn (>10 uncleared compactable results in history)**: oldest replaced with `[Old tool result content cleared]`, keeping the most recent 5; excludes `run_subagent` (one-shot outputs)
 - **Transcript logging**: every main-agent turn is mirrored to `~/.pyccode/projects/<sanitized-cwd>/<sessionId>.jsonl` as append-only JSONL with a `parentUuid` chain, so past sessions can be inspected with `cat` / `grep` / `jq`. Write-only in MVP — resume is a future task.
