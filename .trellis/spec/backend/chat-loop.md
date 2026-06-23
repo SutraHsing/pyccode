@@ -110,6 +110,78 @@ a new agentic loop means inheriting the same contract.
 
 ---
 
+## Transcript Logging
+
+Every `history.append()` in `chat()` is mirrored to an append-only JSONL
+file at `~/.pyccode/projects/<sanitized-cwd>/<SESSION_ID>.jsonl`. Write
+side only — no resume logic in MVP.
+
+### Mechanism
+
+`_history_append(history, role, content)` is the single entry point for
+both effects:
+
+```python
+def _history_append(history, role, content):
+    history.append({"role": role, "content": content})
+    appendTranscript(role, content)
+```
+
+Every site in `chat()` that used to call `history.append(...)` directly
+now calls `_history_append(...)`. That covers: initial user prompt (with
+skill metadata), assistant turns, tool-result user messages (post
+`enforceToolResultBudget`), max-tokens continuation, and the TodoWrite
+round-counter reminder.
+
+### Schema (one JSON object per line)
+
+| Field | Description |
+|---|---|
+| `type` | `"user"` or `"assistant"` (mirrors role) |
+| `uuid` | Fresh `uuid4().hex` per entry |
+| `parentUuid` | Previous entry's `uuid`, or `null` for the first |
+| `timestamp` | ISO 8601 UTC |
+| `sessionId` | `SESSION_ID` |
+| `cwd` | `str(WORKDIR)` |
+| `version` | `"0.1.0"` (reserved for future schema migrations) |
+| `message` | The full `{"role": ..., "content": ...}` dict |
+
+### Rules
+
+- **Append-only.** Existing lines are never modified or deleted.
+- **Open-write-close per entry.** No held file handle; each entry opens,
+  writes, and closes the file. Trade-off: one syscall per append,
+  negligible cost at chat-loop frequency.
+- **Non-ASCII preserved verbatim.** `json.dumps(..., ensure_ascii=False)`
+  so Chinese / emoji survive as-is, not as `\uXXXX` escapes.
+- **Failure isolation.** `appendTranscript` wraps its body in
+  `try/except`; on any failure it prints `[Transcript write failed: ...]`
+  to **stderr** (not stdout) and returns. The in-memory
+  `history.append()` has already happened; the chat loop continues.
+- **Subagent exclusion.** `handle_subagent` uses its own local `messages`
+  list and never calls `_history_append`, so subagent turns do not
+  appear in the transcript. Future task will add separate
+  `<sessionId>/subagents/` files.
+
+### Interaction With `microcompactMessages`
+
+`microcompactMessages` mutates in-memory `history` in place but does
+not call `history.append()`, so it produces no transcript entries. Old
+tool_result entries already written to transcript keep their full
+original content; the placeholder substitution lives only in memory.
+Future resume work must add `content-replacement` entries (or
+equivalent) to preserve microcompact's effect across sessions. See the
+transcript-logging task's design doc for details.
+
+### Future Optimization (deferred)
+
+Layer 1's `WORKDIR/<sessionId>/tool-results/<id>.{txt|json}` files
+could be replaced by "recovery pointers" into the transcript (changing
+the write order to "transcript first, then summary"). Single source of
+truth for conversation history. Out of scope for MVP.
+
+---
+
 ## Skill Metadata Injection
 
 First user message of a fresh history gets prepended with:

@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/chat-loop.md", "reason": "Document transcript logging as a side-output of history.append(); explain subagent exclusion"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Add TRANSCRIPT_* constants and appendTranscript / _history_append to the persistence section"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Add [Transcript write failed: ...] prefix; emphasize stderr routing (not stdout)"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Transcript write failures are swallowed; follow the no-crash-the-loop pattern"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Handler-style docstring on appendTranscript; symbol refs (no line numbers) in spec updates"}

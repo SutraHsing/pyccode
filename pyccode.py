@@ -5,6 +5,7 @@ import subprocess
 import sys
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -23,6 +24,11 @@ MICROCOMPACT_MAX_TOOL_RESULTS = 10     # trigger threshold (uncleared compactabl
 MICROCOMPACT_KEEP_RECENT = 5           # number of recent uncleared results to preserve
 COMPACTABLE_TOOLS = frozenset({"bash", "read", "write", "edit", "TodoWrite", "skill"})
 OLD_TOOL_RESULT_PLACEHOLDER = "[Old tool result content cleared]"
+TRANSCRIPT_VERSION = "0.1.0"
+TRANSCRIPT_DIR = Path.home() / ".pyccode" / "projects"
+TRANSCRIPT_CWD = re.sub(r'[^A-Za-z0-9._-]', '-', str(WORKDIR))
+TRANSCRIPT_PATH = TRANSCRIPT_DIR / TRANSCRIPT_CWD / f"{SESSION_ID}.jsonl"
+_transcript_last_uuid = None
 
 _BASE_SYSTEM = f"""You are a helpful AI Agent at {WORKDIR} with some bash tools.
 Rules:
@@ -745,6 +751,45 @@ def microcompactMessages(history: list) -> list:
         return history
 
 
+def appendTranscript(role: str, content) -> None:
+    """Append one entry to the session transcript JSONL file.
+
+    Writes a single JSON object on its own line at ``TRANSCRIPT_PATH``.
+    Updates the module-level ``_transcript_last_uuid`` to form a parent
+    chain. Schema: ``type`` / ``uuid`` / ``parentUuid`` / ``timestamp`` /
+    ``sessionId`` / ``cwd`` / ``version`` / ``message``.
+
+    Open-write-close per entry for crash safety; no held file handle.
+    Never raises: transcript failures print a yellow notice to stderr
+    and return, so the chat loop is unaffected.
+    """
+    global _transcript_last_uuid
+    try:
+        entry_uuid = uuid.uuid4().hex
+        entry = {
+            "type": role,
+            "uuid": entry_uuid,
+            "parentUuid": _transcript_last_uuid,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "sessionId": SESSION_ID,
+            "cwd": str(WORKDIR),
+            "version": TRANSCRIPT_VERSION,
+            "message": {"role": role, "content": content},
+        }
+        TRANSCRIPT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(TRANSCRIPT_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        _transcript_last_uuid = entry_uuid
+    except Exception as e:
+        print(f"\033[33m[Transcript write failed: {e}]\033[0m", file=sys.stderr)
+
+
+def _history_append(history: list, role: str, content) -> None:
+    """Append a message to history and mirror it to the transcript."""
+    history.append({"role": role, "content": content})
+    appendTranscript(role, content)
+
+
 # Maps tool names to their handler functions.
 TOOL_HANDLERS = {
     "bash": handle_bash,
@@ -779,7 +824,7 @@ def chat(prompt, history=None):
             f"- {name}: {info['description']}" for name, info in SKILLS.items()
         )
         prompt = f"<system-reminder>\nAvailable skills:\n{skill_info}\n</system-reminder>\n\n{prompt}"
-    history.append({"role": "user", "content": prompt})
+    _history_append(history, "user", prompt)
 
     rounds_without_todo = 0
 
@@ -807,7 +852,7 @@ def chat(prompt, history=None):
                     "input": content.input
                 })
 
-        history.append({"role": "assistant", "content": assistant_content})
+        _history_append(history, "assistant", assistant_content)
 
         # 3. Return if model finished naturally (no tool_use, no truncation)
         if response.stop_reason == "end_turn":
@@ -815,10 +860,7 @@ def chat(prompt, history=None):
 
         # 4. If truncated (max_tokens), prompt the model to continue
         if response.stop_reason == "max_tokens":
-            history.append({
-                "role": "user",
-                "content": "Continue where you left off."
-            })
+            _history_append(history, "user", "Continue where you left off.")
             continue
 
         # 5. Use tools
@@ -840,7 +882,7 @@ def chat(prompt, history=None):
                 })
 
         # 6. Manage history: tool use results as user content
-        history.append({"role": "user", "content": enforceToolResultBudget(results)})
+        _history_append(history, "user", enforceToolResultBudget(results))
 
         # 7. Round-counter reminder: nudge agent to use todo after 5 rounds
         if any(c.type == "tool_use" and c.name == "TodoWrite" for c in response.content):
@@ -848,13 +890,12 @@ def chat(prompt, history=None):
         else:
             rounds_without_todo += 1
         if rounds_without_todo >= 5:
-            history.append({
-                "role": "user",
-                "content": (
-                    "Reminder: You've used tools 5+ times without tracking progress. "
-                    "Consider using the 'TodoWrite' tool to create a plan or update task status."
-                )
-            })
+            _history_append(
+                history,
+                "user",
+                "Reminder: You've used tools 5+ times without tracking progress. "
+                "Consider using the 'TodoWrite' tool to create a plan or update task status.",
+            )
             rounds_without_todo = 0
 
 

@@ -25,9 +25,12 @@ Every handler prints at least one yellow (`\033[33m`) status line before doing i
 | `[Subagent] Done` | `handle_subagent` (end) | end-of-loop marker |
 | `Skill: <name>` | `handle_skill` | `Skill: commit` |
 | `[Tool result persisted: <N> chars -> <path>]` | `_persist_tool_result` | persistence notice |
+| `[Transcript write failed: <error>]` | `appendTranscript` (to **stderr**) | `[Transcript write failed: ...]` |
 | `Error: <message>` | `chat()` (unknown-tool branch) | `Error: Unknown tool: foo` |
 
 Cyan (`\033[36m`) is reserved for the REPL prompt (`>> `). Reset with `\033[0m` on the same line.
+
+`[Transcript write failed: ...]` is the one prefix routed to **stderr**, not stdout — handler output and transcript logging share the stdout stream convention, so the failure notice goes elsewhere to avoid muddying it.
 
 ---
 
