@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
-- **Last Active**: 2026-06-22
+- **Total Sessions**: 6
+- **Last Active**: 2026-06-24
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~174 | Active |
+| `journal-1.md` | ~207 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-06-24 | Append transcript JSONL for main agent conversation | `6a4c066` | `main` |
 | 5 | 2026-06-22 | Microcompact old reproducible tool results in history | `fa36ef1` | `main` |
 | 4 | 2026-06-20 | Replace line-number refs with symbol refs in spec | `beb4217` | `main` |
 | 3 | 2026-06-20 | Enforce per-message tool_result budget | `01edb7b` | `main` |

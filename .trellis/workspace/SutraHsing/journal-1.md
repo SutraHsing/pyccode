@@ -172,3 +172,36 @@ Added Layer 3 of context management: count-based cap on uncleared compactable to
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: Append transcript JSONL for main agent conversation
+
+**Date**: 2026-06-24
+**Task**: Append transcript JSONL for main agent conversation
+**Branch**: `main`
+
+### Summary
+
+Added write-side transcript logging at ~/.pyccode/projects/<sanitized-cwd>/<sessionId>.jsonl. Every history.append in chat() mirrored via _history_append helper. Schema includes uuid + parentUuid chain for future resume robustness, sessionId, cwd, version 0.1.0, timestamp, message dict. Open-write-close per entry for crash safety; ensure_ascii=False keeps non-ASCII verbatim. appendTranscript body wrapped in try/except printing yellow notice to stderr on failure so chat loop never crashes. All 5 chat() call sites migrated (initial prompt, assistant turn, tool results, max-tokens continuation, TodoWrite reminder). handle_subagent's messages.append untouched so subagent stays un-transcribed in MVP. microcompactMessages is in-place only and produces no transcript entries; old tool_result entries keep full original content in JSONL. Future resume task must add content-replacement entries. Design doc also notes future optimization: replace tool-results/ files with transcript recovery pointers.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6a4c066` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
