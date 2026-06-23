@@ -205,3 +205,36 @@ Added write-side transcript logging at ~/.pyccode/projects/<sanitized-cwd>/<sess
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: Relocate tool-results/ next to transcript under ~/.pyccode/
+
+**Date**: 2026-06-24
+**Task**: Relocate tool-results/ next to transcript under ~/.pyccode/
+**Branch**: `main`
+
+### Summary
+
+Moved _persist_tool_result output from WORKDIR/<sessionId>/tool-results/ (which polluted the user's project directory on every large read or chatty bash) to ~/.pyccode/projects/<sanitized-cwd>/<sessionId>/tool-results/, sibling of the existing transcript file. Layer 1 and Layer 2 both inherit the new location automatically because they share _persist_tool_result. New TOOL_RESULTS_DIR constant reuses TRANSCRIPT_DIR / TRANSCRIPT_CWD. 3-line change in _persist_tool_result (drop WORKDIR join); summary format unchanged (only the path value changes). Layout matches Claude Code convention: <sessionId> coexists as both .jsonl file stem and tool-results/ directory name. Originally scoped as transcript-merge refactor but user redirected to simpler location move after reviewing Claude Code's design (which also keeps tool-results as separate files). Specs, CLAUDE.md, README.md updated. Pushed to origin/main.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cbfdeba` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
