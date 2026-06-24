@@ -1,0 +1,28 @@
+{
+  "id": "refactor-project-structure",
+  "name": "refactor-project-structure",
+  "title": "Refactor pyccode from monolith to modular structure",
+  "description": "Restructure pyccode.py into organized modules while preserving all existing functionality and trellis workflow",
+  "status": "planned",
+  "dev_type": "refactoring",
+  "scope": "full-project",
+  "package": null,
+  "priority": "P1",
+  "creator": "SutraHsing",
+  "assignee": "SutraHsing",
+  "createdAt": "2026-06-24",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": ["pyccode.py"],
+  "notes": "Goal: Clean structure, not over-engineered. Keep trellis workflow intact.",
+  "meta": {
+    "reasoning": "Single file (40KB) is becoming hard to maintain as features grow (4-layer context management, 7 tools, subagent system, skills, etc.). Need modular structure for future extensibility."
+  }
+}

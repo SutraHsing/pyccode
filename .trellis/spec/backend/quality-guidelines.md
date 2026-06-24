@@ -1,16 +1,17 @@
 # Quality Guidelines
 
-> Code standards for `pyccode.py`. Single-file project, so the rules are tight.
+> Code standards for the pyccode package.
 
 ---
 
 ## Required Patterns
 
 - **Google-style docstring on every handler.** One-line summary, then `Args:` / `Returns:`. See `handle_read` as the reference.
-- **Handler signature `def handle_<name>(input: dict) -> str`**. No kwargs, no optional params. Register in `TOOL_HANDLERS` after definition.
-- **Tool schema and handler kept in sync.** Adding a tool means three edits: schema in `TOOLS`, handler function, entry in `TOOL_HANDLERS`. Forgetting any one fails silently or loudly.
-- **Constants at the top.** No module-level mutable state except `_task_store` (which has documented swap semantics in `handle_subagent`).
+- **Handler signature `def handle_<name>(input: dict) -> str`**. No kwargs, no optional params. Register in the tool dispatch table after definition.
+- **Tool schema and handler kept in sync.** Adding a tool means three edits: schema definition, handler function, dispatch entry. Forgetting any one fails silently or loudly.
+- **Constants centralized.** All module-level constants live in `pyccode.config`. No module-level mutable state except documented globals (`_task_store`, `_transcript_last_uuid`, `_last_input_tokens`) — each has explicit swap / update semantics elsewhere in the spec.
 - **`uv run python -c "import pyccode"`** must succeed after every edit. There is no test suite; this is the smoke test.
+- **Module boundaries follow responsibility, not patterns.** Group by concern (config / tools / context / chat / main). No factories, no DI, no abstract bases.
 
 ---
 
@@ -20,7 +21,7 @@
 - **`output[:50000]` style truncation.** Use `maybePersistLargeToolResult`. See [chat-loop.md](./chat-loop.md).
 - **`import *`.** Explicit imports only.
 - **New package dependencies** without updating `pyproject.toml` and `uv.lock`.
-- **Splitting `pyccode.py` into modules.** Single-file is a design constraint, not an accident.
+- **Circular imports.** All intra-package imports go downward (config ← utils ← tools/context ← chat ← main). If a lower layer needs a higher one, pass it as a parameter instead.
 - **Backwards-compat shims.** The project has no external consumers; rename freely.
 - **Line-number references in specs.** They rot on every edit. Reference symbols (function / class / constant names) or section headings instead.
 
