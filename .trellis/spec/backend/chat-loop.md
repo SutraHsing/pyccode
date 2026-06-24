@@ -31,24 +31,28 @@ while True:
 
 ## Tool Result Size Cap
 
-Three-layer model. Layers 1 and 2 are size-based and share
+Four-layer model. Layers 1 and 2 are size-based and share
 `_persist_tool_result` (the disk-write + preview builder). Layer 3 is
-count-based and clears contents in place.
+count-based and clears contents in place. Layer 4 summarizes whole
+history via LLM when token count nears the context window.
 
 ```
 [turn N starts]
   microcompactMessages(history)                          # layer 3: count cap, whole history
+  maybeAutoCompact(history)                              # layer 4: token cap, whole history (NEW)
   response = client.messages.create(...)
+  _last_input_tokens = response.usage.input_tokens       # tracked for layer 4 (NEW)
   for each tool_use:
     content = maybePersistLargeToolResult(id, output)    # layer 1: per-result (>50K)
     results.append({tool_result, content})
   results = enforceToolResultBudget(results)             # layer 2: per-message (>200K total)
-  history.append({role: user, content: results})
+  _history_append(history, "user", results)
 [turn N+1 starts]
 ```
 
-Layer 3 runs first because it has the broadest scope (whole history) and
-does not depend on the current turn's results.
+Layers 3 and 4 run before the API call; layers 1 and 2 run after, on
+the just-built results. Layer 4 uses real token data from the previous
+response — no estimation, no tokenizer dependency, one-turn lag.
 
 ### Layer 1 — `maybePersistLargeToolResult` (per result)
 
@@ -86,6 +90,37 @@ blocks intact and replaces older ones' `content` with
   assistant messages for the `tool_use_id`.
 - Whole body wrapped in `try/except` returning history unchanged on any
   failure; chat loop must never crash due to compaction.
+
+### Layer 4 — `maybeAutoCompact` (per turn, whole history, LLM-based)
+
+Triggered per turn when `_last_input_tokens > AUTOCOMPACT_THRESHOLD`
+(default 150_000 = 200K window - 20K output reserve - 30K buffer).
+`_last_input_tokens` is set by `chat()` from `response.usage.input_tokens`
+after each API call — real data, no estimation.
+
+When triggered, calls the model with a 9-section summary prompt and
+the full history as input. On success, replaces history in place with
+`[boundary_msg, summary_msg, *last_4_messages]`:
+
+- **Boundary message**: user role, content `[compact_boundary]`. Goes
+  through `_history_append` so it lands in transcript.
+- **Summary message**: user role, content is a continuation prefix
+  ("This session is being continued...") plus the LLM-generated summary,
+  plus a pointer at `TRANSCRIPT_PATH` for full recovery. Also through
+  `_history_append`.
+- **Recent 4 messages**: references to the last 4 entries of the
+  pre-compact history. Put back into history directly (NOT via
+  `_history_append`) so they don't get double-written to transcript.
+
+Short-circuits without work when:
+
+- `_last_input_tokens <= AUTOCOMPACT_THRESHOLD`
+- `len(history) < AUTOCOMPACT_KEEP_RECENT + 2`
+
+Failures (network, 5xx, empty summary) print a yellow stderr notice
+(`[Auto-compact failed: ...]`) and return False. History is untouched;
+next turn will retry. `handle_subagent()` does NOT call
+`maybeAutoCompact` — subagent tasks are short by design.
 
 ### Shared rules (Layers 1 and 2)
 

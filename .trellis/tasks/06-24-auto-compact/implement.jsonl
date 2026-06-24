@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/chat-loop.md", "reason": "Document Layer 4 auto-compact and the _last_input_tokens tracking in chat()"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Add AUTOCOMPACT_* constants and maybeAutoCompact / _callCompactLLM / _buildCompactSummaryMessage to the persistence section"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Add [Auto-compact failed: ...] (stderr) and [Auto-compact: history reduced to N messages] (stdout) prefixes"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Auto-compact failures must not crash the chat loop; follow the try/except + yellow stderr notice pattern"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Handler-style docstring on maybeAutoCompact; symbol refs (no line numbers); no output[:50000] reintroduced"}

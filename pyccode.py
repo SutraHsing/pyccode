@@ -30,6 +30,62 @@ TRANSCRIPT_CWD = re.sub(r'[^A-Za-z0-9._-]', '-', str(WORKDIR))
 TRANSCRIPT_PATH = TRANSCRIPT_DIR / TRANSCRIPT_CWD / f"{SESSION_ID}.jsonl"
 TOOL_RESULTS_DIR = TRANSCRIPT_DIR / TRANSCRIPT_CWD / SESSION_ID / "tool-results"
 _transcript_last_uuid = None
+AUTOCOMPACT_CONTEXT_WINDOW = 200_000       # model's hard limit (input + output combined)
+AUTOCOMPACT_OUTPUT_RESERVE = 20_000        # reserved for model response
+AUTOCOMPACT_BUFFER = 30_000                # one-turn growth safety margin (lag of reactive trigger)
+AUTOCOMPACT_THRESHOLD = AUTOCOMPACT_CONTEXT_WINDOW - AUTOCOMPACT_OUTPUT_RESERVE - AUTOCOMPACT_BUFFER
+AUTOCOMPACT_KEEP_RECENT = 4                # messages to preserve after compact
+AUTOCOMPACT_MAX_OUTPUT_TOKENS = 16_384     # cap for the summary LLM call
+_last_input_tokens = 0                     # updated by chat() after each API response
+
+AUTOCOMPACT_PROMPT = """\
+Summarize the conversation above so a fresh agent can continue the
+work without re-reading the full transcript. Respond with TEXT ONLY -
+do not call any tools.
+
+Cover these 9 sections, in order, each as a short paragraph or bullet
+list:
+
+1. Primary Request and Intent
+   What the user originally asked for, plus any clarifications or
+   scope changes that came up during the conversation.
+
+2. Key Technical Concepts
+   Domain knowledge, project conventions, constraints, or definitions
+   the agent needs to do the work. Name names (libraries, tools,
+   patterns).
+
+3. Files and Code Sections
+   Specific files touched, read, or modified. Include function
+   signatures, key snippets, and line numbers where relevant.
+
+4. Errors and Fixes
+   Bugs hit, root causes identified, and how each was resolved. Quote
+   exact error text where useful.
+
+5. Problem Solving
+   Decisions made, alternatives considered, trade-offs accepted.
+   Include any rejected approaches and why.
+
+6. All User Messages
+   Verbatim or near-verbatim list of every user prompt, clarification,
+   or piece of feedback. Number them.
+
+7. Pending Tasks
+   What's left to do. Be specific - link to acceptance criteria,
+   checklists, or open PR comments where applicable.
+
+8. Current Work
+   What was being done when context ran out. Name the file being
+   edited, the test being run, the question being answered.
+
+9. Optional Next Step
+   The single most immediate action to take. Concrete, not aspirational.
+
+Be specific and dense. File paths, function names, exact error strings
+- include them. A vague summary forces the next agent to re-read the
+transcript, which defeats the point.
+"""
 
 _BASE_SYSTEM = f"""You are a helpful AI Agent at {WORKDIR} with some bash tools.
 Rules:
@@ -790,6 +846,84 @@ def _history_append(history: list, role: str, content) -> None:
     appendTranscript(role, content)
 
 
+def _callCompactLLM(history: list) -> str:
+    """Send history to the model with the compact prompt; return summary text.
+
+    No tools are passed, so the model can only return text. Uses the
+    same model as the main agent (MODEL_NAME env). Lets exceptions
+    propagate so maybeAutoCompact's try/except can apply its fallback.
+    """
+    response = client.messages.create(
+        model=os.environ.get("MODEL_NAME", "claude-sonnet-4-5-20250929"),
+        max_tokens=AUTOCOMPACT_MAX_OUTPUT_TOKENS,
+        system="You are a helpful AI assistant tasked with summarizing conversations.",
+        messages=history + [{"role": "user", "content": AUTOCOMPACT_PROMPT}],
+    )
+    return "".join(c.text for c in response.content if c.type == "text")
+
+
+def _buildCompactSummaryMessage(summary: str) -> str:
+    """Wrap the LLM-generated summary with the continuation prefix."""
+    return (
+        "This session is being continued from a previous conversation "
+        "that ran out of context. A compact summary follows. Do not "
+        "recap or ask the user what to do next — continue the work "
+        "from where it left off.\n\n"
+        f"If you need specific details from before compaction (exact "
+        f"code snippets, error messages, content you generated), read "
+        f"the full transcript at: {TRANSCRIPT_PATH}\n\n"
+        "--- COMPACT SUMMARY ---\n"
+        f"{summary.strip()}\n"
+        "--- END SUMMARY ---"
+    )
+
+
+def maybeAutoCompact(history: list) -> bool:
+    """Summarize and shrink history when the previous turn neared the context limit.
+
+    Reactive trigger: reads ``_last_input_tokens`` (set by ``chat()``
+    after each API response). If it exceeds ``AUTOCOMPACT_THRESHOLD``,
+    calls the model with a 9-section summary prompt and replaces
+    history in place with ``[boundary_msg, summary_msg, *recent_N]``.
+
+    Returns True if a compact happened, False otherwise. Never raises:
+    on LLM failure or empty summary, prints a yellow notice to stderr
+    and returns False without modifying history.
+
+    Args:
+        history: Conversation history as a list of message dicts.
+            Mutated in place if a compact happens.
+
+    Returns:
+        True if history was compacted, False otherwise.
+    """
+    global _last_input_tokens
+    if _last_input_tokens <= AUTOCOMPACT_THRESHOLD:
+        return False
+    if len(history) < AUTOCOMPACT_KEEP_RECENT + 2:
+        return False
+
+    try:
+        summary = _callCompactLLM(history)
+    except Exception as e:
+        print(f"\033[33m[Auto-compact failed: {e}]\033[0m", file=sys.stderr)
+        return False
+
+    if not summary or not summary.strip():
+        print("\033[33m[Auto-compact failed: empty summary]\033[0m", file=sys.stderr)
+        return False
+
+    recent = history[-AUTOCOMPACT_KEEP_RECENT:]
+    history.clear()
+    _history_append(history, "user", "[compact_boundary]")
+    _history_append(history, "user", _buildCompactSummaryMessage(summary))
+    for msg in recent:
+        history.append(msg)  # already in transcript; don't re-append
+
+    print(f"\033[33m[Auto-compact: history reduced to {len(history)} messages]\033[0m")
+    return True
+
+
 # Maps tool names to their handler functions.
 TOOL_HANDLERS = {
     "bash": handle_bash,
@@ -831,6 +965,7 @@ def chat(prompt, history=None):
     while True:
         # 1. Model Chat
         microcompactMessages(history)
+        maybeAutoCompact(history)
         response = client.messages.create(
             model=os.environ.get("MODEL_NAME", "claude-sonnet-4-5-20250929"),
             max_tokens=16384,
@@ -838,6 +973,10 @@ def chat(prompt, history=None):
             messages=history,
             tools=TOOLS + [SUBAGENT_TOOL]
         )
+
+        global _last_input_tokens
+        if response.usage and response.usage.input_tokens:
+            _last_input_tokens = response.usage.input_tokens
 
         # 2. Collect assistant content into history
         assistant_content = []
