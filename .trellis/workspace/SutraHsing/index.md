@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 7
+- **Total Sessions**: 8
 - **Last Active**: 2026-06-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~240 | Active |
+| `journal-1.md` | ~273 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 8 | 2026-06-24 | Auto-compact history via LLM summary when context nears limit | `0027938` | `main` |
 | 7 | 2026-06-24 | Relocate tool-results/ next to transcript under ~/.pyccode/ | `cbfdeba` | `main` |
 | 6 | 2026-06-24 | Append transcript JSONL for main agent conversation | `6a4c066` | `main` |
 | 5 | 2026-06-22 | Microcompact old reproducible tool results in history | `fa36ef1` | `main` |

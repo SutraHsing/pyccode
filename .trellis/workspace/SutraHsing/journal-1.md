@@ -238,3 +238,36 @@ Moved _persist_tool_result output from WORKDIR/<sessionId>/tool-results/ (which 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Auto-compact history via LLM summary when context nears limit
+
+**Date**: 2026-06-24
+**Task**: Auto-compact history via LLM summary when context nears limit
+**Branch**: `main`
+
+### Summary
+
+Added Layer 4 of context management: maybeAutoCompact(history). Reactive trigger via _last_input_tokens (response.usage.input_tokens from the previous API call). When > 150K (= 200K window - 20K output reserve - 30K buffer), calls model with a 9-section summary prompt (Primary Request / Concepts / Files / Errors / Problem Solving / User Messages / Pending Tasks / Current Work / Next Step) and replaces history in place with [boundary_msg, summary_msg, *last_4_messages]. _callCompactLLM lets exceptions propagate so maybeAutoCompact's try/except applies the fallback: yellow stderr notice, return False, history untouched. Boundary and summary go through _history_append so they land in transcript; recent 4 are re-inserted as references and not re-appended (transcript idempotency). chat() now tracks _last_input_tokens after every API response and calls maybeAutoCompact at the top of each loop iteration. Subagent stays un-compacted (short tasks by design). Out of scope: predictive autocompact, Session Memory, failure counter / disable, subagent compact, real tokenizer. All three specs (chat-loop / directory-structure / logging-guidelines) updated. Pushed to origin/main.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0027938` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
