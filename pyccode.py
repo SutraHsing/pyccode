@@ -20,6 +20,7 @@ from pyccode.config import (
     AUTOCOMPACT_OUTPUT_RESERVE,
     AUTOCOMPACT_PROMPT,
     AUTOCOMPACT_THRESHOLD,
+    _BASE_SYSTEM,
     COMPACTABLE_TOOLS,
     LARGE_TOOL_RESULT_THRESHOLD,
     MICROCOMPACT_KEEP_RECENT,
@@ -37,429 +38,28 @@ from pyccode.config import (
     WORKDIR,
     client,
 )
+from pyccode.tools import (
+    SUBAGENT_TOOL,
+    SKILLS,
+    TOOLS,
+    TOOL_HANDLERS,
+    _task_store,
+    handle_bash,
+    handle_edit,
+    handle_read,
+    handle_write,
+    handle_todo,
+    handle_skill,
+)
 
 _transcript_last_uuid = None
 _last_input_tokens = 0                     # updated by chat() after each API response
 
-TODO_WRITE_TOOL_DESCRIPTION = """\
-**When to Use This Tool**: Use this tool proactively in these scenarios:
-1. Complex multi-step tasks - When a task requires 3+ distinct steps or careful planning
-2. User-initiated tasking - When the user provides multiple tasks, explicitly requests the todo list, or gives new instructions to capture
-3. Workflow state management - Mark tasks in_progress BEFORE starting work (one at a time), and mark completed when done (adding any follow-up tasks discovered along the way)
-
-Update the task list. Pass the full list of tasks each time — this replaces the entire list.
-
-**Task States**: Use these states to track progress:
-- pending: Task not yet started
-- in_progress: Currently working on (limit to ONE task at a time)
-- completed: Task finished successfully
-
-**IMPORTANT**: Task descriptions must have two forms:
-- content: The imperative form describing what needs to be done (e.g., "Run tests", "Build the project")
-- activeForm: The present continuous form shown during execution (e.g., "Running tests", "Building the project")
-
-**Task Management**:
-1. Mark a task in_progress right before starting it — only ONE task should be in_progress at a time
-2. When a task is done, mark it completed and mark the next task in_progress in the same call
-3. Only mark completed when fully finished. If blocked by errors or unresolved issues, keep it in_progress — ask the user for help if needed, but do not prematurely mark it completed\
-"""
-
-TOOLS = [
-    {
-        "name": "bash",
-        "description": "Execute a bash command. Use for: git, ls, find, grep, python, pip, and any shell operations. For reading/writing/editing files, prefer the dedicated read/write/edit tools.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "Bash command to execute"
-                }
-            },
-            "required": ["command"]
-        }
-    },
-    {
-        "name": "read",
-        "description": "Read file contents with line numbers. Use for: viewing source code, config files, logs, any text file.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Path to the file to read (absolute or relative)"
-                },
-                "offset": {
-                    "type": "integer",
-                    "description": "Line number to start reading from (1-based). Default: 1"
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Maximum number of lines to read. Default: 2000"
-                }
-            },
-            "required": ["file_path"]
-        }
-    },
-    {
-        "name": "write",
-        "description": "Write content to a file. Creates the file if it does not exist, overwrites it if it does. Creates parent directories if needed.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Path to the file to write (absolute or relative)"
-                },
-                "content": {
-                    "type": "string",
-                    "description": "Content to write to the file"
-                }
-            },
-            "required": ["file_path", "content"]
-        }
-    },
-    {
-        "name": "edit",
-        "description": "Edit a file by replacing exact text matches. Finds old_string in the file and replaces it with new_string. The old_string must match exactly (including whitespace and indentation).",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Path to the file to edit (absolute or relative)"
-                },
-                "old_string": {
-                    "type": "string",
-                    "description": "Exact text to find in the file"
-                },
-                "new_string": {
-                    "type": "string",
-                    "description": "Text to replace old_string with"
-                }
-            },
-            "required": ["file_path", "old_string", "new_string"]
-        }
-    },
-    {
-        "name": "TodoWrite",
-        "description": TODO_WRITE_TOOL_DESCRIPTION,
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "todos": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "content": {
-                                "type": "string",
-                                "description": "Imperative form of the task (e.g., 'Run tests')"
-                            },
-                            "status": {
-                                "type": "string",
-                                "enum": ["pending", "in_progress", "completed"],
-                                "description": "Task state: pending, in_progress, or completed"
-                            },
-                            "activeForm": {
-                                "type": "string",
-                                "description": "Present continuous form shown during execution (e.g., 'Running tests')"
-                            }
-                        },
-                        "required": ["content", "status", "activeForm"]
-                    },
-                    "description": "Full list of tasks (replaces the entire list each call)"
-                }
-            },
-            "required": ["todos"]
-        }
-    },
-    {
-        "name": "skill",
-        "description": "Load a skill's detailed instructions by name. Use when the user's request matches a skill's description. Returns the skill's full markdown body and its directory path (for accessing reference files).",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Name of the skill to load"
-                }
-            },
-            "required": ["name"]
-        }
-    }
-]
-
-SUBAGENT_TOOL = {
-    "name": "run_subagent",
-    "description": (
-        "Spawn a sub-agent to handle a complex subtask in isolation. "
-        "The sub-agent has access to bash, read, write, edit, and TodoWrite tools "
-        "but cannot spawn further sub-agents. "
-        "IMPORTANT: The sub-agent shares NO context with you — it only sees the prompt you write. "
-        "Your prompt must be self-contained and include all relevant information the sub-agent needs "
-        "(file paths, prior findings, constraints, goals). Be generous with context rather than terse. "
-        "Do not assume the sub-agent knows anything from your conversation history."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "prompt": {
-                "type": "string",
-                "description": "The task for the sub-agent",
-            }
-        },
-        "required": ["prompt"],
-    },
-}
-
-
-# Set up env:
-# ANTHROPIC_BASE_URL
-# ANTHROPIC_API_KEY
-# For example:
-# export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
-# export ANTHROPIC_API_KEY=${DEEPSEEK_API_KEY}
-
-
-@dataclass
-class Task:
-    id: int
-    content: str
-    status: str = "pending"  # "pending" | "in_progress" | "completed"
-    activeForm: str = ""
-
-
-@dataclass
-class TaskStore:
-    tasks: list[Task] = field(default_factory=list)
-    def write(self, todos: list[dict]) -> str:
-        """Replace the entire task list with the provided todos."""
-        self.tasks.clear()
-        for i, todo in enumerate(todos, start=1):
-            self.tasks.append(Task(
-                id=i,
-                content=todo["content"],
-                status=todo["status"],
-                activeForm=todo["activeForm"],
-            ))
-        return self._format()
-
-    def _format(self) -> str:
-        if not self.tasks:
-            return "(no tasks)"
-        icons = {"pending": "[ ]", "in_progress": "[~]", "completed": "[x]"}
-        return "\n".join(f"  {t.id}. {icons.get(t.status, '[?]')} {t.content}" for t in self.tasks)
-
-
-_task_store = TaskStore()
-
-
-def load_skills() -> dict:
-    """Load all skill definitions from skills/*/SKILL.md.
-
-    Returns a dict keyed by skill name, each value is:
-    {"description": str, "content": str, "path": str (absolute path to skill directory)}.
-    The path allows the agent to locate reference files alongside SKILL.md.
-    """
-    skills = {}
-    skills_dir = WORKDIR / "skills"
-    if not skills_dir.is_dir():
-        return skills
-    for entry in sorted(skills_dir.iterdir()):
-        if not entry.is_dir():
-            continue
-        skill_file = entry / "SKILL.md"
-        if not skill_file.is_file():
-            continue
-        with open(skill_file, "r", encoding="utf-8") as f:
-            raw = f.read()
-        m = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)', raw, re.DOTALL)
-        if not m:
-            continue
-        meta_text, body = m.group(1), m.group(2)
-        meta = yaml.safe_load(meta_text) or {}
-        name = meta.get("name", entry.name)
-        description = meta.get("description", "")
-        skills[name] = {"description": description, "content": body.strip(), "path": str(entry)}
-    return skills
-
-
-SKILLS = load_skills()
-
-
-def handle_bash(input: dict) -> str:
-    """Execute a bash command and return its output.
-
-    Runs the given shell command via subprocess, captures stdout and stderr,
-    and returns the combined output. Handles timeouts and empty output gracefully.
-
-    Args:
-        input: A dict containing a 'command' key with the shell command string
-            to execute.
-
-    Returns:
-        The combined stdout and stderr output from the command as a string.
-    """
-    command = input["command"]
-    print(f"\033[33m$ {command}\033[0m")
-    try:
-        result = subprocess.run(
-            command, shell=True, capture_output=True, text=True,
-            timeout=300, cwd=os.getcwd()
-        )
-        output = result.stdout + result.stderr
-    except subprocess.TimeoutExpired:
-        output = "(timeout after 300s)"
-    output = output.encode('utf-8', errors='replace').decode('utf-8')
-    if not output:
-        output = "(empty)"
-    print(output)
-    return output
-
-
-def handle_read(input: dict) -> str:
-    """Read file contents and return them with line numbers.
-
-    Opens the specified file, extracts a range of lines based on the given
-    offset and limit, and formats them with line numbers. Handles common
-    file system errors gracefully, returning descriptive error messages.
-
-    Args:
-        input: A dict containing the following keys:
-            file_path (str): Path to the file to read (absolute or relative).
-            offset (int, optional): Line number to start reading from (1-based).
-                Defaults to 1.
-            limit (int, optional): Maximum number of lines to read.
-                Defaults to 2000.
-
-    Returns:
-        The file contents with line-number formatting as a string,
-        or an error message string if the file cannot be read.
-    """
-    file_path = input["file_path"]
-    offset = input.get("offset", 1)
-    limit = input.get("limit", 2000)
-    print(f"\033[33mRead: {file_path}\033[0m")
-    try:
-        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-            lines = f.readlines()
-        selected = lines[offset - 1 : offset - 1 + limit]
-        output = "".join(
-            f"{i:>6}\t{line}" for i, line in enumerate(selected, start=offset)
-        )
-    except FileNotFoundError:
-        output = f"Error: File not found: {file_path}"
-    except IsADirectoryError:
-        output = f"Error: Is a directory: {file_path}"
-    except PermissionError:
-        output = f"Error: Permission denied: {file_path}"
-    except Exception as e:
-        output = f"Error: {e}"
-    if not output:
-        output = "(empty)"
-    print(output)
-    return output
-
-
-def handle_write(input: dict) -> str:
-    """Write content to a file and return a status message.
-
-    Creates the file (and any missing parent directories) if it does not exist,
-    or overwrites the existing file. Handles common file system errors gracefully,
-    returning descriptive error messages.
-
-    Args:
-        input: A dict containing the following keys:
-            file_path (str): Path to the file to write (absolute or relative).
-            content (str): Content to write to the file.
-
-    Returns:
-        A status message string indicating success or describing an error.
-    """
-    file_path = input["file_path"]
-    content = input["content"]
-    print(f"\033[33mWrite: {file_path}\033[0m")
-    try:
-        os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-        output = f"OK: Wrote {len(content)} chars to {file_path}"
-    except PermissionError:
-        output = f"Error: Permission denied: {file_path}"
-    except Exception as e:
-        output = f"Error: {e}"
-    print(output)
-    return output
-
-
-def handle_edit(input: dict) -> str:
-    """Edit a file by replacing an exact text match with new text.
-
-    Reads the specified file, locates occurrences of old_string, and replaces
-    them with new_string. Handles zero-match and multiple-match cases, as well
-    as common file system errors, returning descriptive status or error messages.
-
-    Args:
-        input: A dict containing the following keys:
-            file_path (str): Path to the file to edit (absolute or relative).
-            old_string (str): Exact text to find in the file.
-            new_string (str): Text to replace old_string with.
-
-    Returns:
-        A status message string indicating how many occurrences were replaced,
-        or describing an error.
-    """
-    file_path = input["file_path"]
-    old_string = input["old_string"]
-    new_string = input["new_string"]
-    print(f"\033[33mEdit: {file_path}\033[0m")
-    try:
-        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-            content = f.read()
-        count = content.count(old_string)
-        if count == 0:
-            output = f"Error: old_string not found in {file_path}"
-        else:
-            content = content.replace(old_string, new_string)
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            output = f"OK: Replaced {count} occurrence(s) in {file_path}"
-    except FileNotFoundError:
-        output = f"Error: File not found: {file_path}"
-    except PermissionError:
-        output = f"Error: Permission denied: {file_path}"
-    except Exception as e:
-        output = f"Error: {e}"
-    print(output)
-    return output
-
-
-def handle_todo(input: dict) -> str:
-    """Replace the task list with the provided todos.
-
-    Args:
-        input: A dict containing:
-            todos (list[dict]): List of task objects with keys:
-                content (str): Imperative task description.
-                status (str): One of 'pending', 'in_progress', 'completed'.
-                activeForm (str): Present continuous form for display.
-
-    Returns:
-        Formatted task list string.
-    """
-    todos = input["todos"]
-    output = _task_store.write(todos)
-    print(f"\033[33mTodo: updated {len(todos)} task(s)\033[0m")
-    print(output)
-    return output
-
-
 def handle_subagent(input: dict) -> str:
     """Run a sub-agent with isolated context to handle a subtask.
 
-    Spawns an in-process sub-agent that has access to all tools in TOOLS
-    (bash, read, write, edit, TodoWrite) but NOT run_subagent itself,
+    Spawns an in-process sub-agent that has access to all leaf tools
+    (bash, read, write, edit, TodoWrite, skill) but NOT run_subagent itself,
     preventing recursive spawning. The sub-agent gets its own isolated
     task store and conversation history.
 
@@ -469,6 +69,8 @@ def handle_subagent(input: dict) -> str:
     Returns:
         The sub-agent's final text response.
     """
+    from pyccode.tools.todo import TaskStore
+    from pyccode.tools.skill import SKILLS
     global _task_store
     prompt = input["prompt"]
     print(f"\033[33m[Subagent] {prompt[:2000]}\033[0m")
@@ -545,14 +147,11 @@ def handle_subagent(input: dict) -> str:
         _task_store = main_store
 
 
-def handle_skill(input: dict) -> str:
-    """Load and return a skill's full instructions by name."""
-    name = input["name"]
-    if name not in SKILLS:
-        return f"Error: Unknown skill: {name}. Available: {', '.join(SKILLS.keys()) or '(none)'}"
-    print(f"\033[33mSkill: {name}\033[0m")
-    skill = SKILLS[name]
-    return f"Skill path: {skill['path']}\n\n{skill['content']}"
+# Main-agent dispatch table: leaf handlers + run_subagent.
+# handle_subagent references this dict at call time; sub-agent invocations
+# pass tools=TOOLS (no SUBAGENT_TOOL), so the model never asks for
+# run_subagent even though the dispatch entry exists.
+TOOL_HANDLERS = {**TOOL_HANDLERS, "run_subagent": handle_subagent}
 
 
 def _persist_tool_result(tool_use_id: str, output: str) -> str:
@@ -862,16 +461,6 @@ def maybeAutoCompact(history: list) -> bool:
 # export ANTHROPIC_API_KEY=${DEEPSEEK_API_KEY}
 
 
-
-TOOL_HANDLERS = {
-    "bash": handle_bash,
-    "read": handle_read,
-    "write": handle_write,
-    "edit": handle_edit,
-    "TodoWrite": handle_todo,
-    "run_subagent": handle_subagent,
-    "skill": handle_skill,
-}
 
 
 def chat(prompt, history=None):
