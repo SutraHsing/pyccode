@@ -52,7 +52,7 @@ def appendTranscript(role: str, content) -> None:
         print(f"\033[33m[Transcript write failed: {e}]\033[0m", file=sys.stderr)
 
 
-def _history_append(history: list, role: str, content) -> None:
+def history_append(history: list, role: str, content) -> None:
     """Append a message to history and mirror it to the transcript."""
     history.append({"role": role, "content": content})
     appendTranscript(role, content)

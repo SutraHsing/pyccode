@@ -90,13 +90,13 @@ transcript, which defeats the point.
 """
 
 # === System prompts ===
-_BASE_SYSTEM = f"""You are a helpful AI Agent at {WORKDIR} with some bash tools.
+BASE_SYSTEM = f"""You are a helpful AI Agent at {WORKDIR} with some bash tools.
 Rules:
 * Prefer tools use over prose. Act first, explain briefly after.
 * For complex tasks with multiple steps, use the TodoWrite tool to plan and track progress.
 """
 
-SYSTEM = _BASE_SYSTEM + """\
+SYSTEM = BASE_SYSTEM + """\
 * Subagent: For complex subtasks, use the run_subagent tool to delegate to a sub-agent with isolated context, e.g.:
   run_subagent(prompt="explore src/ and summarize the architecture")
 * When to use subagent: A task requires to consume a lot of context(read many files, etc.)

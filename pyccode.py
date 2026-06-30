@@ -2,8 +2,8 @@ import os
 import sys
 
 from pyccode.config import (
+    BASE_SYSTEM,
     SYSTEM,
-    _BASE_SYSTEM,
     client,
 )
 from pyccode.tools import (
@@ -14,8 +14,8 @@ from pyccode.tools import (
     _task_store,
 )
 from pyccode.context import (
-    _history_append,
     enforceToolResultBudget,
+    history_append,
     maybeAutoCompact,
     maybePersistLargeToolResult,
     microcompactMessages,
@@ -68,7 +68,7 @@ def handle_subagent(input: dict) -> str:
             response = client.messages.create(
                 model=os.environ.get("MODEL_NAME", "claude-sonnet-4-5-20250929"),
                 max_tokens=16384,
-                system=_BASE_SYSTEM,
+                system=BASE_SYSTEM,
                 messages=messages,
                 tools=TOOLS,
             )
@@ -153,7 +153,7 @@ def chat(prompt, history=None):
             f"- {name}: {info['description']}" for name, info in SKILLS.items()
         )
         prompt = f"<system-reminder>\nAvailable skills:\n{skill_info}\n</system-reminder>\n\n{prompt}"
-    _history_append(history, "user", prompt)
+    history_append(history, "user", prompt)
 
     rounds_without_todo = 0
     last_input_tokens = 0
@@ -186,7 +186,7 @@ def chat(prompt, history=None):
                     "input": content.input
                 })
 
-        _history_append(history, "assistant", assistant_content)
+        history_append(history, "assistant", assistant_content)
 
         # 3. Return if model finished naturally (no tool_use, no truncation)
         if response.stop_reason == "end_turn":
@@ -194,7 +194,7 @@ def chat(prompt, history=None):
 
         # 4. If truncated (max_tokens), prompt the model to continue
         if response.stop_reason == "max_tokens":
-            _history_append(history, "user", "Continue where you left off.")
+            history_append(history, "user", "Continue where you left off.")
             continue
 
         # 5. Use tools
@@ -216,7 +216,7 @@ def chat(prompt, history=None):
                 })
 
         # 6. Manage history: tool use results as user content
-        _history_append(history, "user", enforceToolResultBudget(results))
+        history_append(history, "user", enforceToolResultBudget(results))
 
         # 7. Round-counter reminder: nudge agent to use todo after 5 rounds
         if any(c.type == "tool_use" and c.name == "TodoWrite" for c in response.content):
@@ -224,7 +224,7 @@ def chat(prompt, history=None):
         else:
             rounds_without_todo += 1
         if rounds_without_todo >= 5:
-            _history_append(
+            history_append(
                 history,
                 "user",
                 "Reminder: You've used tools 5+ times without tracking progress. "

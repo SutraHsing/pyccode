@@ -1,11 +1,16 @@
-"""Context management: transcript logging + four-layer size/count/token caps."""
-from .transcript import appendTranscript, _history_append, _transcript_last_uuid
+"""Context management: transcript logging + four-layer size/count/token caps.
+
+Public API: ``appendTranscript``, ``history_append`` (transcript);
+``maybePersistLargeToolResult``, ``enforceToolResultBudget``,
+``microcompactMessages``, ``maybeAutoCompact`` (layers). Private helpers
+(``_persist_tool_result``, ``_callCompactLLM``, ``_buildCompactSummaryMessage``,
+``_transcript_last_uuid``) stay inside their submodules — deep-import them
+if you genuinely need them.
+"""
+from .transcript import appendTranscript, history_append
 from .layers import (
-    _persist_tool_result,
-    maybePersistLargeToolResult,
     enforceToolResultBudget,
-    microcompactMessages,
-    _callCompactLLM,
-    _buildCompactSummaryMessage,
     maybeAutoCompact,
+    maybePersistLargeToolResult,
+    microcompactMessages,
 )

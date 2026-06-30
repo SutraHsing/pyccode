@@ -26,7 +26,7 @@ from pyccode.config import (
     TRANSCRIPT_PATH,
     client,
 )
-from pyccode.context.transcript import _history_append
+from pyccode.context.transcript import history_append
 
 
 def _persist_tool_result(tool_use_id: str, output: str) -> str:
@@ -282,8 +282,8 @@ def maybeAutoCompact(history: list, last_input_tokens: int) -> bool:
 
     recent = history[-AUTOCOMPACT_KEEP_RECENT:]
     history.clear()
-    _history_append(history, "user", "[compact_boundary]")
-    _history_append(history, "user", _buildCompactSummaryMessage(summary))
+    history_append(history, "user", "[compact_boundary]")
+    history_append(history, "user", _buildCompactSummaryMessage(summary))
     for msg in recent:
         history.append(msg)  # already in transcript; don't re-append
 
