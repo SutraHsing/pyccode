@@ -1,4 +1,4 @@
-"""Thin entry wrapper. All logic lives in the pyccode/ package."""
+"""Enable `python -m pyccode` execution."""
 from pyccode.main import main
 
 if __name__ == "__main__":
