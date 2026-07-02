@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
-- **Last Active**: 2026-06-24
+- **Total Sessions**: 9
+- **Last Active**: 2026-07-02
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~273 | Active |
+| `journal-1.md` | ~311 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-07-02 | Refactor pyccode from monolith to modular package | `bd06511`, `c93e90d`, `22e4384`, `1c15ebf`, `4d481b0`, `28fb8a5` | `main` |
 | 8 | 2026-06-24 | Auto-compact history via LLM summary when context nears limit | `0027938` | `main` |
 | 7 | 2026-06-24 | Relocate tool-results/ next to transcript under ~/.pyccode/ | `cbfdeba` | `main` |
 | 6 | 2026-06-24 | Append transcript JSONL for main agent conversation | `6a4c066` | `main` |

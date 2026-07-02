@@ -271,3 +271,41 @@ Added Layer 4 of context management: maybeAutoCompact(history). Reactive trigger
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: Refactor pyccode from monolith to modular package
+
+**Date**: 2026-07-02
+**Task**: Refactor pyccode from monolith to modular package
+**Branch**: `main`
+
+### Summary
+
+Split the 1014-line pyccode.py monolith into a pyccode/ package across 5 phases plus a naming-cleanup pass. Phase 1: extract config.py (constants + Anthropic client + system prompts). Phase 2: extract leaf tools into pyccode/tools/{bash,file,todo,skill}.py with a registry __init__.py exporting TOOLS / TOOL_HANDLERS / SUBAGENT_TOOL. Phase 3: extract 4-layer context management into pyccode/context/{transcript,layers}.py. Renamed _history_append -> history_append and _BASE_SYSTEM -> BASE_SYSTEM since both are genuinely cross-module (drop the misleading underscore). Phase 4: extract chat() + handle_subagent() into pyccode/chat.py and main() into pyccode/main.py; pyccode.py is now a 5-line wrapper. Added pyccode/__main__.py for python -m pyccode support. Phase 5: updated CLAUDE.md, README.md, .trellis/spec/backend/directory-structure.md to drop single-file claims and document the new module map. Smoke tests pass via python pyccode.py, python -m pyccode, and from pyccode import main. quality-guidelines.md updated earlier: removed the single-file forbidden pattern, added a no-circular-imports rule. pyccode.context.__init__ exports only the public API; private helpers stay in submodules.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bd06511` | (see git log) |
+| `c93e90d` | (see git log) |
+| `22e4384` | (see git log) |
+| `1c15ebf` | (see git log) |
+| `4d481b0` | (see git log) |
+| `28fb8a5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
