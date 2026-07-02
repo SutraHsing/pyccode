@@ -1,6 +1,6 @@
 # pyccode
 
-A single-file AI agent CLI that uses the Anthropic Messages API with multi-tool and skill support. Supports interactive REPL and single-prompt modes.
+An AI agent CLI built on the Anthropic Messages API with multi-tool and skill support. Supports interactive REPL and single-prompt modes. The root `pyccode.py` is a 5-line thin wrapper; all logic lives in the `pyccode/` package.
 
 ## Features
 

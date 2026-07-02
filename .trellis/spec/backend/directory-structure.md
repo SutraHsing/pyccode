@@ -1,6 +1,6 @@
 # Directory Structure
 
-> pyccode is a single-file Python CLI. This spec describes where things live inside `pyccode.py` and the supporting project files.
+> pyccode is a Python package CLI. The `pyccode.py` at the repo root is a 5-line thin wrapper that imports `main` from the `pyccode/` package and runs it.
 
 ---
 
@@ -8,7 +8,7 @@
 
 ```
 pyccode/
-├── pyccode.py              # all application code
+├── pyccode.py              # thin entry wrapper (5 lines)
 ├── pyproject.toml          # entry point: pyccode = "pyccode:main"
 ├── uv.lock                 # dependency lock
 ├── .env                    # ANTHROPIC_BASE_URL / ANTHROPIC_API_KEY / MODEL_NAME / ANTHROPIC_TIMEOUT
@@ -16,10 +16,24 @@ pyccode/
 │   └── <name>/SKILL.md     # required; YAML frontmatter + body
 ├── CLAUDE.md               # agent guidance (high-level)
 ├── README.md               # user docs
-└── .trellis/               # Trellis workflow scaffolding
+├── .trellis/               # Trellis workflow scaffolding
+└── pyccode/                # the actual package
+    ├── __init__.py         # re-exports main
+    ├── __main__.py         # enables `python -m pyccode`
+    ├── main.py             # CLI dispatch (single-prompt vs REPL)
+    ├── chat.py             # chat() + handle_subagent() + TOOL_HANDLERS
+    ├── config.py           # constants, system prompts, Anthropic client
+    ├── tools/
+    │   ├── __init__.py     # TOOLS / TOOL_HANDLERS / SUBAGENT_TOOL registry
+    │   ├── bash.py
+    │   ├── file.py         # read / write / edit
+    │   ├── skill.py
+    │   └── todo.py         # Task / TaskStore / handle_todo
+    └── context/
+        ├── __init__.py     # public API re-exports only
+        ├── layers.py       # 4-layer context management
+        └── transcript.py   # JSONL transcript logging
 ```
-
-There is no package hierarchy. Everything ships in `pyccode.py`.
 
 ### On-Disk Artifacts Outside the Project
 
@@ -43,32 +57,39 @@ coexist).
 
 ---
 
-## Module Ordering Inside `pyccode.py`
+## Module Responsibilities
 
-Top-to-bottom order is load-bearing — earlier sections define names used later. Preserve this ordering when inserting new code.
+| Module | Responsibility |
+|---|---|
+| `pyccode.config` | Constants (`WORKDIR`, `SESSION_ID`, thresholds, `TRANSCRIPT_*`, `AUTOCOMPACT_*`), system prompts (`BASE_SYSTEM`, `SYSTEM`), `load_dotenv`, shared `client = Anthropic(...)`. Leaf module. |
+| `pyccode.tools.*` | One file per leaf tool, each exporting a handler + `SCHEMA`. `__init__.py` assembles `TOOLS`, `TOOL_HANDLERS` (leaf only), `SUBAGENT_TOOL`, and re-exports `SKILLS`, `_task_store`. |
+| `pyccode.context.transcript` | `appendTranscript`, `history_append`, `_transcript_last_uuid` (chain state). |
+| `pyccode.context.layers` | `_persist_tool_result` (private), `maybePersistLargeToolResult`, `enforceToolResultBudget`, `microcompactMessages`, `maybeAutoCompact`, plus private compact helpers. |
+| `pyccode.chat` | `chat()` main loop + `handle_subagent()` sub-agent loop. Builds the run_subagent-aware `TOOL_HANDLERS` locally. |
+| `pyccode.main` | CLI dispatch — single-prompt mode (`pyccode "<task>"`) vs REPL (`pyccode`). |
+| `pyccode.__init__` / `pyccode.__main__` | Package entry: re-export `main` so `pyccode = "pyccode:main"` entry point and `python -m pyccode` both work. |
 
-1. **Imports + module constants** — `json`, `os`, `re`, `subprocess`, `sys`, `uuid`, dataclass, datetime, Path, yaml, Anthropic, dotenv. Then `WORKDIR`, `SESSION_ID`, `LARGE_TOOL_RESULT_THRESHOLD`, `SUMMARY_HEAD_CHARS`, `TOOL_RESULT_MESSAGE_BUDGET`, `MICROCOMPACT_MAX_TOOL_RESULTS`, `MICROCOMPACT_KEEP_RECENT`, `COMPACTABLE_TOOLS`, `OLD_TOOL_RESULT_PLACEHOLDER`, `TRANSCRIPT_VERSION`, `TRANSCRIPT_DIR`, `TRANSCRIPT_CWD`, `TRANSCRIPT_PATH`, `TOOL_RESULTS_DIR`, `_transcript_last_uuid`, `AUTOCOMPACT_CONTEXT_WINDOW`, `AUTOCOMPACT_OUTPUT_RESERVE`, `AUTOCOMPACT_BUFFER`, `AUTOCOMPACT_THRESHOLD`, `AUTOCOMPACT_KEEP_RECENT`, `AUTOCOMPACT_MAX_OUTPUT_TOKENS`, `_last_input_tokens`, `AUTOCOMPACT_PROMPT`.
-2. **`_BASE_SYSTEM`, `SYSTEM`** — Two-tier system prompt. Subagents get `_BASE_SYSTEM` only.
-3. **`TODO_WRITE_TOOL_DESCRIPTION`** — Long description kept out of the schema literal for readability.
-4. **`TOOLS`, `SUBAGENT_TOOL`** — Anthropic tool-use schemas. `SUBAGENT_TOOL` is separate; only the main agent gets `TOOLS + [SUBAGENT_TOOL]`.
-5. **Env config + Anthropic client** — `load_dotenv(override=True)`, timeout from env, `client = Anthropic(...)`.
-6. **`Task`, `TaskStore`** — In-memory todo tracking.
-7. **`_task_store`** — Module-global; swapped by `handle_subagent`.
-8. **`load_skills()` + `SKILLS`** — Auto-discovery of `skills/*/SKILL.md`.
-9. **Tool handlers** — `handle_bash`, `handle_read`, `handle_write`, `handle_edit`, `handle_todo`, `handle_subagent`, `handle_skill`.
-10. **Tool result persistence + transcript + auto-compact** — `_persist_tool_result` (disk-write + preview builder), `maybePersistLargeToolResult` (per-result wrapper, >50K), `enforceToolResultBudget` (per-message wrapper, >200K total), `microcompactMessages` (per-turn wrapper, >10 uncleared compactable in whole history), `appendTranscript` (JSONL side-output of every `history.append`), `_history_append` (combined in-memory + transcript writer used by `chat()`), `maybeAutoCompact` (per-turn LLM summarization when previous turn's input_tokens > 150K), `_callCompactLLM` (private summary call helper), `_buildCompactSummaryMessage` (private summary wrapper).
-11. **`TOOL_HANDLERS`** — Dispatch dict. Defined AFTER all handlers so all names resolve.
-12. **`chat(prompt, history)`** — Core agentic loop.
-13. **`main()`** — CLI entry: single-prompt vs REPL.
+### Import Direction (no cycles)
+
+```
+main → chat → tools → config
+              ↘ context → config
+```
+
+All intra-package imports go downward. If a lower layer needs a higher
+one, pass it as a parameter (see `handle_subagent` lazy-importing
+`TaskStore` / `SKILLS` inside the function body).
 
 ---
 
 ## Where New Code Goes
 
-- **New tool**: add a `handle_<name>(input: dict) -> str` function in the handler block; add its schema to `TOOLS` (or to `SUBAGENT_TOOL` if main-agent-only); register in `TOOL_HANDLERS`.
+- **New leaf tool**: create `pyccode/tools/<name>.py` exporting `handle_<name>` + `SCHEMA`; register both in `pyccode/tools/__init__.py` (`TOOLS` list and `TOOL_HANDLERS` dict).
+- **New main-agent-only tool** (sub-agent can't see): same as above, plus add to `SUBAGENT_TOOL` exclusion in `chat.py` if applicable.
 - **New skill**: drop a directory under `skills/<name>/SKILL.md`. No code change needed.
-- **New module constant**: top of file, next to `WORKDIR` / `SESSION_ID`.
-- **New system-prompt tweak**: edit `_BASE_SYSTEM` (both agents) or `SYSTEM` (main only).
+- **New module constant**: `pyccode/config.py`, grouped with related constants.
+- **New system-prompt tweak**: edit `BASE_SYSTEM` (both agents) or `SYSTEM` (main only) in `config.py`.
+- **New context-management layer**: add to `pyccode/context/layers.py`; expose via `pyccode/context/__init__.py` if it should be public API.
 
 ---
 
