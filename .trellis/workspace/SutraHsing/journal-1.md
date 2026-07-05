@@ -309,3 +309,36 @@ Split the 1014-line pyccode.py monolith into a pyccode/ package across 5 phases 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: Permission framework Task 1: allowlist + flag validation
+
+**Date**: 2026-07-05
+**Task**: Permission framework Task 1: allowlist + flag validation
+**Branch**: `main`
+
+### Summary
+
+Added default-confirm permission layer to pyccode. New pyccode/permissions/ package: engine.py (CommandConfig + shell-operator pre-check + flag-walking parser + validate_command + check_permission + prompt_user) and allowlist.py (READONLY_ALLOWLIST for ls/cat/pwd/grep/git status/git log). ALLOWED_TOOLS = {read, TodoWrite, skill, run_subagent} auto-pass; everything else (write/edit/bash and future mutating tools) prompts y/N; bash sub-rule auto-allows commands matching READONLY_ALLOWLIST via flag-walking validation. On user denial handlers return 'Error: Permission denied by user'. Default-confirm (not default-deny) because a future DENY_LIST tier (true hard-deny, no prompt) is reserved for fork bombs etc. Sub-agent inherits the same handlers so the same checks apply. handle_bash/handle_write/handle_edit all wire in the gate. Three new spec entries: permissions.md (full architecture), error-handling.md (new 'Error: Permission denied by user' category), directory-structure.md (module map). CLAUDE.md updated. Honest limits documented: catches accidents not adversarial input (variable expansion / base64 / aliases bypass argv parsing). dangerous_callback mechanism deferred to Task 3 (needed for find/git tag/git branch/date positional attacks). TTY detection and --allow flag deferred to Task 4. Task 2 (expand allowlist: find/sed/sort/uniq/checksums) is next.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5616834` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
