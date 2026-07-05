@@ -23,6 +23,10 @@ pyccode/
     ├── main.py             # CLI dispatch (single-prompt vs REPL)
     ├── chat.py             # chat() + handle_subagent() + TOOL_HANDLERS
     ├── config.py           # constants, system prompts, Anthropic client
+    ├── permissions/
+    │   ├── __init__.py     # public API: validate_command, check_permission, prompt_user
+    │   ├── engine.py       # CommandConfig + flag-walking validator + prompt_user
+    │   └── allowlist.py    # READONLY_ALLOWLIST data (ls/cat/pwd/grep/git status/git log)
     ├── tools/
     │   ├── __init__.py     # TOOLS / TOOL_HANDLERS / SUBAGENT_TOOL registry
     │   ├── bash.py

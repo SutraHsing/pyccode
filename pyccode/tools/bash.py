@@ -2,6 +2,8 @@
 import os
 import subprocess
 
+from pyccode.permissions import check_permission, prompt_user
+
 
 def handle_bash(input: dict) -> str:
     """Execute a bash command and return its output.
@@ -9,14 +11,22 @@ def handle_bash(input: dict) -> str:
     Runs the given shell command via subprocess, captures stdout and stderr,
     and returns the combined output. Handles timeouts and empty output gracefully.
 
+    Permission gate: read-only commands in the allowlist run without
+    prompting; everything else prompts the user (y/N). On denial, returns
+    "Error: Permission denied by user" without executing.
+
     Args:
         input: A dict containing a 'command' key with the shell command string
             to execute.
 
     Returns:
-        The combined stdout and stderr output from the command as a string.
+        The combined stdout and stderr output from the command as a string,
+        or "Error: Permission denied by user" on user denial.
     """
     command = input["command"]
+    if check_permission("bash", input) == "confirm":
+        if not prompt_user(f"Run bash: {command}"):
+            return "Error: Permission denied by user"
     print(f"\033[33m$ {command}\033[0m")
     try:
         result = subprocess.run(

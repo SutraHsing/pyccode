@@ -1,4 +1,5 @@
 """File tools: read, write, edit."""
+from pyccode.permissions import prompt_user
 
 
 def handle_read(input: dict) -> str:
@@ -52,17 +53,24 @@ def handle_write(input: dict) -> str:
     or overwrites the existing file. Handles common file system errors gracefully,
     returning descriptive error messages.
 
+    Permission gate: always prompts the user (y/N) before writing. On
+    denial, returns "Error: Permission denied by user" without touching
+    the filesystem.
+
     Args:
         input: A dict containing the following keys:
             file_path (str): Path to the file to write (absolute or relative).
             content (str): Content to write to the file.
 
     Returns:
-        A status message string indicating success or describing an error.
+        A status message string indicating success, "Error: Permission
+        denied by user", or describing an error.
     """
     import os
     file_path = input["file_path"]
     content = input["content"]
+    if not prompt_user(f"Write to {file_path}"):
+        return "Error: Permission denied by user"
     print(f"\033[33mWrite: {file_path}\033[0m")
     try:
         os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
@@ -84,6 +92,10 @@ def handle_edit(input: dict) -> str:
     them with new_string. Handles zero-match and multiple-match cases, as well
     as common file system errors, returning descriptive status or error messages.
 
+    Permission gate: always prompts the user (y/N) before editing. On
+    denial, returns "Error: Permission denied by user" without touching
+    the filesystem.
+
     Args:
         input: A dict containing the following keys:
             file_path (str): Path to the file to edit (absolute or relative).
@@ -92,11 +104,13 @@ def handle_edit(input: dict) -> str:
 
     Returns:
         A status message string indicating how many occurrences were replaced,
-        or describing an error.
+        "Error: Permission denied by user", or describing an error.
     """
     file_path = input["file_path"]
     old_string = input["old_string"]
     new_string = input["new_string"]
+    if not prompt_user(f"Edit {file_path}"):
+        return "Error: Permission denied by user"
     print(f"\033[33mEdit: {file_path}\033[0m")
     try:
         with open(file_path, 'r', encoding='utf-8', errors='replace') as f:

@@ -65,3 +65,21 @@ output = output.encode('utf-8', errors='replace').decode('utf-8')
 - **Returning `None`.** The API rejects the tool_result. Return `"(empty)"` for no-output cases.
 - **Silent fallbacks.** Catching `Exception` and continuing without telling the model is forbidden — always encode the failure in the returned string.
 - **Bare `except:`.** Use `except Exception as e:` so we do not swallow `KeyboardInterrupt`.
+
+---
+
+## Permission Denial
+
+When the user denies a `prompt_user` confirmation (or when stdin EOF
+prevents asking), handlers return the literal string:
+
+```
+Error: Permission denied by user
+```
+
+This follows the same `"Error: ..."` convention as filesystem errors.
+The agent can react to it like any other error string (apologize,
+suggest an alternative, ask for guidance). The command/file is not
+touched.
+
+See [permissions.md](./permissions.md) for the gate that produces this.

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/permissions.md", "reason": "New spec to write — describes allowlist model, allowlisted commands, fallback to confirm"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Add pyccode/permissions/ to module map"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Permission denial returns 'Error: Permission denied by user' string from handlers — new error category"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Code review checklist — handler-style docstring on validate_command, no output[:50000] reintroduced"}
