@@ -342,3 +342,36 @@ Added default-confirm permission layer to pyccode. New pyccode/permissions/ pack
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: PostToolUse hook framework (subprocess observer MVP)
+
+**Date**: 2026-09-06
+**Task**: PostToolUse hook framework (subprocess observer MVP)
+**Branch**: `main`
+
+### Summary
+
+Added pyccode/hooks/ package: external subprocess scripts fire after every tool call. engine.py has HookType (PostToolUse only), HookConfig, HookOutcome, build_post_tool_use_payload (12-field stdin JSON), run_hook (never raises; captures exit code / timeout / stderr), run_hooks dispatcher. settings.py loads ~/.pyccode/settings.json once with full failure isolation (missing file, malformed JSON, bad entries all degrade to no-hooks + stderr warning). chat() fires run_hooks in both main loop (agent_id=main) and handle_subagent (agent_id=subagent), after handler returns and before maybePersistLargeToolResult so hooks see raw output. Added the previously-missing PermissionMode enum to permissions/engine.py. Shipped examples/hooks/audit.py writing per-tool entries to ~/.pyccode/audit.jsonl. New spec hooks.md: 5 motivating use cases, subprocess contract, payload schema with 3 documented divergences from Claude Code (agent_id label not UUID, string tool_response, pyccode-specific tool_error). Verified: marker-file e2e, exit-42/timeout/malformed-settings isolation, audit example produces correct JSONL. Follow-up decided with user: next task is internal hooks (in-process registry) + Stop event (fires at chat() end_turn before return, carrying full turn snapshot: user_prompt, turn_messages slice, per-response usage) + transcript refactored to a Stop-fired internal hook writing batch turn entries with gitBranch and message.usage; history_append retires its inline transcript write; external audit hook unchanged.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7e03f75` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
