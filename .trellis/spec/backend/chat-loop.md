@@ -46,7 +46,7 @@ history via LLM when token count nears the context window.
     content = maybePersistLargeToolResult(id, output)    # layer 1: per-result (>50K)
     results.append({tool_result, content})
   results = enforceToolResultBudget(results)             # layer 2: per-message (>200K total)
-  _history_append(history, "user", results)
+  history_append(history, "user", results)
 [turn N+1 starts]
 ```
 
@@ -103,14 +103,14 @@ the full history as input. On success, replaces history in place with
 `[boundary_msg, summary_msg, *last_4_messages]`:
 
 - **Boundary message**: user role, content `[compact_boundary]`. Goes
-  through `_history_append` so it lands in transcript.
+  through `history_append` so it lands in transcript.
 - **Summary message**: user role, content is a continuation prefix
   ("This session is being continued...") plus the LLM-generated summary,
   plus a pointer at `TRANSCRIPT_PATH` for full recovery. Also through
-  `_history_append`.
+  `history_append`.
 - **Recent 4 messages**: references to the last 4 entries of the
   pre-compact history. Put back into history directly (NOT via
-  `_history_append`) so they don't get double-written to transcript.
+  `history_append`) so they don't get double-written to transcript.
 
 Short-circuits without work when:
 
@@ -153,20 +153,28 @@ side only — no resume logic in MVP.
 
 ### Mechanism
 
-`_history_append(history, role, content)` is the single entry point for
-both effects:
+`history_append(history, role, content, usage=None)` appends to history
+and fires the internal-only `MessageAppend` event; the transcript hook
+(registered in `pyccode/context/transcript.py`) writes the JSONL entry:
 
 ```python
-def _history_append(history, role, content):
+def history_append(history, role, content, usage=None):
     history.append({"role": role, "content": content})
-    appendTranscript(role, content)
+    run_hooks(HookType.MESSAGE_APPEND, {...role, content, usage...})
+
+def _transcript_message_append_hook(payload):
+    appendTranscript(payload["role"], payload["content"], usage=payload.get("usage"))
 ```
 
-Every site in `chat()` that used to call `history.append(...)` directly
-now calls `_history_append(...)`. That covers: initial user prompt (with
-skill metadata), assistant turns, tool-result user messages (post
-`enforceToolResultBudget`), max-tokens continuation, and the TodoWrite
-round-counter reminder.
+Incremental timing is identical to v1 (one entry per append; crash loses
+at most one entry) — the change is routing through hook dispatch, which
+makes the transcript a first-party consumer of the hook framework. See
+[hooks.md](./hooks.md) for the internal-vs-external lane rationale.
+
+Every site in `chat()` calls `history_append(...)`: initial user prompt
+(with skill metadata), assistant turns (**passing `response.usage` as
+`usage`**), tool-result user messages (post `enforceToolResultBudget`),
+max-tokens continuation, and the TodoWrite round-counter reminder.
 
 ### Schema (one JSON object per line)
 
@@ -178,8 +186,9 @@ round-counter reminder.
 | `timestamp` | ISO 8601 UTC |
 | `sessionId` | `SESSION_ID` |
 | `cwd` | `str(WORKDIR)` |
+| `gitBranch` | Branch name from `.git/HEAD` (no subprocess); `null` when not a repo / detached / worktree |
 | `version` | `"0.1.0"` (reserved for future schema migrations) |
-| `message` | The full `{"role": ..., "content": ...}` dict |
+| `message` | `{"role": ..., "content": ...}`; assistant entries additionally embed `"usage": {"input_tokens": ..., "output_tokens": ...}` (Claude Code parity) |
 
 ### Rules
 
@@ -194,7 +203,7 @@ round-counter reminder.
   to **stderr** (not stdout) and returns. The in-memory
   `history.append()` has already happened; the chat loop continues.
 - **Subagent exclusion.** `handle_subagent` uses its own local `messages`
-  list and never calls `_history_append`, so subagent turns do not
+  list and never calls `history_append`, so subagent turns do not
   appear in the transcript. Future task will add separate
   `<sessionId>/subagents/` files.
 

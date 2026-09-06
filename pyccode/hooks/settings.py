@@ -8,6 +8,12 @@ from .engine import HookConfig
 
 SETTINGS_PATH = Path.home() / ".pyccode" / "settings.json"
 
+# Event names that may be configured as external subprocess hooks.
+# Internal-only events (MessageAppend) are deliberately excluded — the
+# external contract mirrors Claude Code's semantic-event list; mechanical
+# mutation events stay first-party.
+EXTERNAL_EVENTS = frozenset({"PostToolUse"})
+
 
 @dataclass
 class SettingsSchema:
@@ -42,6 +48,12 @@ def load_settings(force_reload: bool = False) -> SettingsSchema:
     hooks_raw = raw.get("hooks", {}) or {}
     hooks: dict[str, list[HookConfig]] = {}
     for event_name, hook_list in hooks_raw.items():
+        if event_name not in EXTERNAL_EVENTS:
+            print(
+                f"\033[33m[Settings: event {event_name!r} is internal-only or unknown, skipping]\033[0m",
+                file=sys.stderr,
+            )
+            continue
         parsed: list[HookConfig] = []
         for h in hook_list or []:
             try:

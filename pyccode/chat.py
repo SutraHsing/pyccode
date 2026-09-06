@@ -158,8 +158,13 @@ def chat(prompt, history=None):
             tools=TOOLS + [SUBAGENT_TOOL]
         )
 
-        if response.usage and response.usage.input_tokens:
+        usage_dict = None
+        if response.usage:
             last_input_tokens = response.usage.input_tokens
+            usage_dict = {
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
+            }
 
         # 2. Collect assistant content into history
         assistant_content = []
@@ -174,7 +179,7 @@ def chat(prompt, history=None):
                     "input": content.input
                 })
 
-        history_append(history, "assistant", assistant_content)
+        history_append(history, "assistant", assistant_content, usage=usage_dict)
 
         # 3. Return if model finished naturally (no tool_use, no truncation)
         if response.stop_reason == "end_turn":

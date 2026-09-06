@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/hooks.md", "reason": "Verify internal hook mechanism, Stop event payload, and dispatch order are documented"}
+{"file": ".trellis/spec/backend/chat-loop.md", "reason": "Verify transcript batch-at-Stop timing and history_append slim-down are reflected"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Code review checklist — docstrings, no circular imports, spec symbol refs"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Confirm internal hook failures and transcript write failures are isolated"}

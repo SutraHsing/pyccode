@@ -5,14 +5,24 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Callable
 
 from pyccode.config import SESSION_ID, TRANSCRIPT_PATH, WORKDIR
 
 
 class HookType(Enum):
-    """Event types that can fire hooks. MVP: only POST_TOOL_USE."""
+    """Event types that can fire hooks.
+
+    POST_TOOL_USE is external-dispatchable (settings.json).
+    MESSAGE_APPEND is internal-only: first-party in-process hooks may
+    register on it, but external subprocess hooks never receive it —
+    mechanical mutation events stay out of the external contract
+    (mirrors Claude Code, which exposes only semantic events).
+    """
     POST_TOOL_USE = "PostToolUse"
-    # Future: PRE_TOOL_USE, USER_PROMPT_SUBMIT, STOP
+    MESSAGE_APPEND = "MessageAppend"
+    # Future external: STOP, PRE_TOOL_USE, USER_PROMPT_SUBMIT
+    # Future internal: SUBAGENT_STOP
 
 
 @dataclass
@@ -85,8 +95,29 @@ def run_hook(config: HookConfig, payload: dict) -> HookOutcome:
         return HookOutcome(exit_code=-2, timed_out=False, stdout="", stderr=str(e))
 
 
-def run_hooks(event: HookType, payload: dict) -> None:
-    """Dispatch payload to all configured hooks for this event. Never raises."""
+InternalHook = Callable[[dict], None]
+_internal_hooks: dict[HookType, list[InternalHook]] = {}
+
+
+def register_internal_hook(event: HookType, fn: InternalHook) -> None:
+    """Register an in-process hook. Code-registered, always-on, no config."""
+    _internal_hooks.setdefault(event, []).append(fn)
+
+
+def _run_internal(event: HookType, payload: dict) -> None:
+    """Run internal hooks in-process. Exceptions isolated to stderr."""
+    for fn in _internal_hooks.get(event, []):
+        try:
+            fn(payload)
+        except Exception as e:
+            print(
+                f"\033[33m[Internal hook {fn.__name__!r} failed: {e}]\033[0m",
+                file=sys.stderr,
+            )
+
+
+def _run_external(event: HookType, payload: dict) -> None:
+    """Dispatch payload to configured subprocess hooks. Never raises."""
     from .settings import load_settings
 
     settings = load_settings()
@@ -107,3 +138,9 @@ def run_hooks(event: HookType, payload: dict) -> None:
             )
             if outcome.stderr.strip():
                 print(f"\033[33m{outcome.stderr.strip()}\033[0m", file=sys.stderr)
+
+
+def run_hooks(event: HookType, payload: dict) -> None:
+    """Dispatch to internal hooks first, then external. Never raises."""
+    _run_internal(event, payload)
+    _run_external(event, payload)
