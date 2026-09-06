@@ -375,3 +375,36 @@ Added pyccode/hooks/ package: external subprocess scripts fire after every tool 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: Transcript v2 via internal MessageAppend hook
+
+**Date**: 2026-09-06
+**Task**: Transcript v2 via internal MessageAppend hook
+**Branch**: `main`
+
+### Summary
+
+Added an internal hook lane to the hooks framework and routed transcript writing through it. hooks/engine.py gained register_internal_hook + _run_internal; run_hooks dispatches internal (in-process, always-on) before external (subprocess). New HookType.MESSAGE_APPEND is internal-only: hooks/settings.py EXTERNAL_EVENTS allowlist skips settings.json entries for it with a stderr warning, keeping the external contract aligned with Claude Code's semantic-event list (Claude Code deliberately has no message-append hook; its transcript is core infra, not an extension point). context/transcript.py: appendTranscript now embeds message.usage on assistant entries and gitBranch on every entry (parsed from .git/HEAD, no subprocess; None for non-repo/detached/worktree); history_append fires MessageAppend instead of calling appendTranscript inline — incremental v1 timing preserved (crash loses at most one entry), compact boundary/summary flow through unchanged. chat.py passes response.usage on assistant turns. Design evolution worth recording: initially planned batch-at-Stop transcript (turn snapshot at end_turn), user questioned why Claude Code has no message-append hook which exposed that transcript-as-hook diverges from Claude Code's architecture; resolved with the internal-only MessageAppend lane (unification without external contract debt). Stop event deferred to roadmap with 4 recorded use cases (notification, turn report, teardown, guard-loop veto) and slim payload sketch. Verified: internal failure isolation, external gate, real API run (usage 1653/3 + branch main), compact path, REPL 2-turn chain, PostToolUse regression.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b398007` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

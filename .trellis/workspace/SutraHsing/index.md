@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 11
+- **Total Sessions**: 12
 - **Last Active**: 2026-09-06
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~377 | Active |
+| `journal-1.md` | ~410 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 12 | 2026-09-06 | Transcript v2 via internal MessageAppend hook | `b398007` | `main` |
 | 11 | 2026-09-06 | PostToolUse hook framework (subprocess observer MVP) | `7e03f75` | `main` |
 | 10 | 2026-07-05 | Permission framework Task 1: allowlist + flag validation | `5616834` | `main` |
 | 9 | 2026-07-02 | Refactor pyccode from monolith to modular package | `bd06511`, `c93e90d`, `22e4384`, `1c15ebf`, `4d481b0`, `28fb8a5` | `main` |
