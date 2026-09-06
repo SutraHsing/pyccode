@@ -6,6 +6,18 @@ allowlist data lives in ``pyccode.permissions.allowlist``.
 import re
 import shlex
 from dataclasses import dataclass, field
+from enum import Enum
+
+
+class PermissionMode(Enum):
+    """How strict the permission gate is. MVP: only DEFAULT.
+
+    Future modes (not yet implemented):
+    - ACCEPT_EDITS — auto-allow write/edit, still confirm bash
+    - PLAN — fully read-only, all mutating tools denied
+    - BYPASS — auto-allow everything (dangerous, opt-in only)
+    """
+    DEFAULT = "default"
 
 
 @dataclass

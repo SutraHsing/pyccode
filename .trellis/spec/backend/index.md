@@ -12,6 +12,7 @@
 | [Tool Handlers](./tool-handlers.md) | Handler contract, signature, anti-patterns | Before adding or editing a `handle_*` function |
 | [Chat Loop](./chat-loop.md) | Agentic loop invariants, tool result persistence, skill injection | Before editing `chat()` or `handle_subagent()` |
 | [Permissions](./permissions.md) | Allowlist + flag validator + y/N gate | Before adding commands to `READONLY_ALLOWLIST` or editing handler permission flow |
+| [Hooks](./hooks.md) | PostToolUse subprocess observer, payload schema, settings.json | Before adding new hook types or editing hook framework |
 | [Error Handling](./error-handling.md) | Error-return convention, subagent isolation | Before adding error paths |
 | [Logging Guidelines](./logging-guidelines.md) | print / ANSI conventions, prefix table | Before adding operator-facing output |
 | [Quality Guidelines](./quality-guidelines.md) | Required + forbidden patterns, code review checklist | Before any non-trivial edit |

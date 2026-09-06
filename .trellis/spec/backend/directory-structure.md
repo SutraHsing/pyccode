@@ -27,6 +27,10 @@ pyccode/
     │   ├── __init__.py     # public API: validate_command, check_permission, prompt_user
     │   ├── engine.py       # CommandConfig + flag-walking validator + prompt_user
     │   └── allowlist.py    # READONLY_ALLOWLIST data (ls/cat/pwd/grep/git status/git log)
+    ├── hooks/
+    │   ├── __init__.py     # public API: run_hooks, build_post_tool_use_payload
+    │   ├── engine.py       # HookType + HookConfig + run_hook + run_hooks + payload builder
+    │   └── settings.py     # load_settings (cached ~/.pyccode/settings.json parser)
     ├── tools/
     │   ├── __init__.py     # TOOLS / TOOL_HANDLERS / SUBAGENT_TOOL registry
     │   ├── bash.py

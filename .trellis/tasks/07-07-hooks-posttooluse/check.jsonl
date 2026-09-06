@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/hooks.md", "reason": "Verify the 5 use cases, PostToolUse contract, subprocess execution model, and future-hook-types roadmap are all documented"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Code review checklist — no output[:50000], docstrings, no line-number refs, no circular imports"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Confirm hook subprocess failures are isolated (print stderr, never break chat loop)"}
+{"file": ".trellis/spec/backend/chat-loop.md", "reason": "Verify PostToolUse firing point is documented alongside other chat-loop invariants"}

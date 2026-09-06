@@ -10,6 +10,7 @@ from pyccode.context import (
     maybePersistLargeToolResult,
     microcompactMessages,
 )
+from pyccode.hooks import HookType, build_post_tool_use_payload, run_hooks
 
 
 def handle_subagent(input: dict) -> str:
@@ -94,6 +95,13 @@ def handle_subagent(input: dict) -> str:
                         output = handler(content.input)
                     else:
                         output = f"Error: Unknown tool: {content.name}"
+                    run_hooks(HookType.POST_TOOL_USE, build_post_tool_use_payload(
+                        tool_name=content.name,
+                        tool_use_id=content.id,
+                        tool_input=content.input,
+                        tool_response=output,
+                        agent_id="subagent",
+                    ))
                     results.append({
                         "type": "tool_result",
                         "tool_use_id": content.id,
@@ -189,6 +197,13 @@ def chat(prompt, history=None):
                     output = f"Error: Unknown tool: {content.name}"
                     print(output)
 
+                run_hooks(HookType.POST_TOOL_USE, build_post_tool_use_payload(
+                    tool_name=content.name,
+                    tool_use_id=content.id,
+                    tool_input=content.input,
+                    tool_response=output,
+                    agent_id="main",
+                ))
                 results.append({
                     "type": "tool_result",
                     "tool_use_id": content.id,
