@@ -8,12 +8,14 @@ An AI agent CLI built on the Anthropic Messages API with multi-tool and skill su
 - **Skill loading**: Auto-discovers `skills/*/SKILL.md` files and lets the agent load detailed instructions on demand
 - **Subagent system**: Delegate complex subtasks to isolated in-process agents
 - **Task tracking**: Built-in todo list with pending/in_progress/completed states
+- **Permissions**: `bash` / `write` / `edit` prompt for confirmation (y/N) before running; a built-in read-only allowlist (`ls`, `cat`, `pwd`, `grep`, `git status`, `git log`) runs without prompting via flag validation. Catches accidental damage; not a sandbox against malicious input.
+- **Hooks**: external subprocess scripts fire on agent events (`PostToolUse`). Configure in `~/.pyccode/settings.json`; the payload arrives as JSON on stdin. First-party features (transcript) ride the same dispatch as internal hooks. See `examples/hooks/audit.py` for a working example.
 - **Four-layer context management**:
   - **Per result (>50K chars)**: written to `~/.pyccode/projects/<sanitized-cwd>/<sessionId>/tool-results/<id>.{txt|json}` (never inside the project) and replaced in conversation with a ~2KB head-only summary
   - **Per message (>200K chars total)**: largest results persisted first until under budget
   - **Per turn (>10 uncleared compactable results in history)**: oldest replaced with `[Old tool result content cleared]`, keeping the most recent 5; excludes `run_subagent` (one-shot outputs)
   - **Per turn (previous input_tokens > 150K)**: history is LLM-summarized into a 9-section compact summary; replaced with `[boundary, summary, *last_4_messages]` so long sessions continue past the context window
-- **Transcript logging**: every main-agent turn is mirrored to `~/.pyccode/projects/<sanitized-cwd>/<sessionId>.jsonl` as append-only JSONL with a `parentUuid` chain, so past sessions can be inspected with `cat` / `grep` / `jq`. Write-only in MVP — resume is a future task.
+- **Transcript logging**: every main-agent turn is mirrored to `~/.pyccode/projects/<sanitized-cwd>/<sessionId>.jsonl` as append-only JSONL with a `parentUuid` chain, so past sessions can be inspected with `cat` / `grep` / `jq`. Implemented as an internal hook on the message stream. Write-only in MVP — resume is a future task.
 - **Anthropic-compatible**: Works with any provider supporting the Anthropic Messages API
 
 ## Installation
@@ -80,6 +82,7 @@ When skills are present, pyccode injects their names and descriptions into the f
 
 - `anthropic>=0.75.0`
 - `dotenv>=0.9.9`
+- `pyyaml>=6.0`
 
 ## Author
 
